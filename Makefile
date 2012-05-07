@@ -22,7 +22,7 @@ UFAT_CFLAGS = -O1 -Wall -ggdb
 
 all: ufat
 
-ufat: ufat.o ufat_dir.o main.o
+ufat: ufat.o ufat_dir.o ufat_file.o main.o
 	$(CC) -o $@ $^
 
 %.o: %.c

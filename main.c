@@ -28,10 +28,12 @@
 struct command;
 
 #define OPTION_STATISTICS	0x01
+#define OPTION_RANDOMIZE	0x02
 
 struct options {
 	int			flags;
 	unsigned int		log2_bs;
+	unsigned int		seed;
 
 	const char		*filename;
 	const struct command	*command;
@@ -162,9 +164,9 @@ static int list_dir(struct ufat_directory *dir)
 		printf(" ");
 		print_attributes(inf.attributes & ~UFAT_ATTR_DIRECTORY);
 		if (inf.attributes & UFAT_ATTR_DIRECTORY)
-			printf(" <DIR>");
+			printf(" %9s", "<DIR>");
 		else
-			printf("      ");
+			printf(" %9u", inf.file_size);
 		printf(" %s\n", lfn);
 	}
 
@@ -259,6 +261,63 @@ static int cmd_fstat(struct ufat *uf, const struct options *opt)
 	return 0;
 }
 
+static int cmd_read(struct ufat *uf, const struct options *opt)
+{
+	struct ufat_directory dir;
+	struct ufat_dirent ent;
+	struct ufat_file file;
+	int err;
+
+	if (!opt->argc) {
+		fprintf(stderr, "You must specify a file path\n");
+		return -1;
+	}
+
+	ufat_open_root(uf, &dir);
+	err = ufat_dir_find_path(&dir, opt->argv[0], &ent);
+
+	if (err < 0) {
+		fprintf(stderr, "ufat_dir_find_path: %s\n",
+			ufat_strerror(err));
+		return -1;
+	}
+
+	if (err) {
+		fprintf(stderr, "No such file or directory: %s\n",
+			opt->argv[0]);
+		return -1;
+	}
+
+	err = ufat_open_file(uf, &file, &ent);
+	if (err < 0) {
+		fprintf(stderr, "ufat_open_file: %s\n", ufat_strerror(err));
+		return -1;
+	}
+
+	for (;;) {
+		char buf[16384];
+		int req_size = sizeof(buf);
+		int len;
+
+		if (opt->flags & OPTION_RANDOMIZE)
+			req_size = random() % sizeof(buf) + 1;
+
+		len = ufat_file_read(&file, buf, req_size);
+		if (len < 0) {
+			fprintf(stderr, "ufat_file_read: %s\n",
+				ufat_strerror(len));
+			return -1;
+		}
+
+		if (!len)
+			break;
+
+		fwrite(buf, len, 1, stdout);
+	}
+
+	return 0;
+}
+
 static void show_info(const struct ufat_bpb *bpb)
 {
 	printf("Type:                       FAT%d\n", bpb->type);
@@ -282,11 +341,14 @@ static void usage(const char *progname)
 "Options may be any of the following:\n"
 "  -b block-size        Set the simulated block size\n"
 "  -S                   Show performance statistics\n"
+"  -R seed              Randomize file IO request sizes\n"
 "  --help               Show this text\n"
 "  --version            Show version information\n"
 "\n"
 "With no command, basic information is printed. Available commands are:\n"
-"  dir [directory]      Show a directory listing\n",
+"  dir [directory]      Show a directory listing\n"
+"  fstat [path]         Show directory entry details\n"
+"  read [file]          Dump the contents of the given file\n",
 progname);
 }
 
@@ -326,7 +388,8 @@ static int parse_blocksize(const char *arg, unsigned int *out)
 
 static const struct command command_table[] = {
 	{"dir",		cmd_dir},
-	{"fstat",	cmd_fstat}
+	{"fstat",	cmd_fstat},
+	{"read",	cmd_read}
 };
 
 static const struct command *find_command(const char *name)
@@ -356,8 +419,13 @@ static int parse_options(int argc, char **argv, struct options *opt)
 	memset(opt, 0, sizeof(*opt));
 	opt->log2_bs = 9;
 
-	while ((o = getopt_long(argc, argv, "b:S", longopts, NULL)) >= 0)
+	while ((o = getopt_long(argc, argv, "b:SR:", longopts, NULL)) >= 0)
 		switch (o) {
+		case 'R':
+			opt->flags |= OPTION_RANDOMIZE;
+			opt->seed = atoi(optarg);
+			break;
+
 		case 'S':
 			opt->flags |= OPTION_STATISTICS;
 			break;
@@ -445,6 +513,8 @@ int main(int argc, char **argv)
 
 	if (parse_options(argc, argv, &opt) < 0)
 		return -1;
+
+	srandom(opt.seed);
 
 	if (file_device_open(&dev, opt.filename, opt.log2_bs) < 0)
 		return -1;

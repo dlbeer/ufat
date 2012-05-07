@@ -294,7 +294,8 @@ const char *ufat_strerror(int err)
 		[UFAT_ERR_INVALID_CLUSTER] = "Invalid cluster index",
 		[UFAT_ERR_NAME_TOO_LONG] = "Filename too long",
 		[UFAT_ERR_NOT_DIRECTORY] = "Not a directory",
-		[UFAT_ERR_BLANK_PATH] = "Blank path"
+		[UFAT_ERR_BLANK_PATH] = "Blank path",
+		[UFAT_ERR_NOT_FILE] = "Not a file"
 	};
 
 	if (err < 0)
@@ -316,7 +317,7 @@ static int read_fat12(struct ufat *uf, ufat_cluster_t index,
 static int read_fat16(struct ufat *uf, ufat_cluster_t index,
 		      ufat_cluster_t *out)
 {
-	const unsigned int shift = uf->dev->log2_block_size + 1;
+	const unsigned int shift = uf->dev->log2_block_size - 1;
 	const unsigned int b = index >> shift;
 	const unsigned int r = index & ((1 << shift) - 1);
 	int i = ufat_cache_open(uf, uf->bpb.fat_start + b);
@@ -344,7 +345,7 @@ static int read_fat16(struct ufat *uf, ufat_cluster_t index,
 static int read_fat32(struct ufat *uf, ufat_cluster_t index,
 		      ufat_cluster_t *out)
 {
-	const unsigned int shift = uf->dev->log2_block_size + 2;
+	const unsigned int shift = uf->dev->log2_block_size - 2;
 	const unsigned int b = index >> shift;
 	const unsigned int r = index & ((1 << shift) - 1);
 	int i = ufat_cache_open(uf, uf->bpb.fat_start + b);

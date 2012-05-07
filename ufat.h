@@ -74,6 +74,7 @@ struct ufat_stat {
 
 /* Data read/calculated from the BIOS Parameter Block (read-only) */
 typedef uint32_t		ufat_cluster_t;
+typedef uint32_t		ufat_size_t;
 
 #define UFAT_CLUSTER_FREE	((ufat_cluster_t)0)
 #define UFAT_CLUSTER_RESERVED	((ufat_cluster_t)1)
@@ -128,6 +129,7 @@ typedef enum {
 	UFAT_ERR_NAME_TOO_LONG,
 	UFAT_ERR_NOT_DIRECTORY,
 	UFAT_ERR_BLANK_PATH,
+	UFAT_ERR_NOT_FILE,
 	UFAT_MAX_ERR
 } ufat_error_t;
 
@@ -180,7 +182,7 @@ struct ufat_dirent {
 	ufat_time_t		modify_time;
 	ufat_date_t		access_date;
 	ufat_cluster_t		first_cluster;
-	uint32_t		file_size;
+	ufat_size_t		file_size;
 };
 
 struct ufat_directory {
@@ -204,5 +206,20 @@ int ufat_dir_find(struct ufat_directory *dir,
 		  const char *name, struct ufat_dirent *inf);
 int ufat_dir_find_path(struct ufat_directory *dir,
 		       const char *path, struct ufat_dirent *inf);
+
+/* File IO */
+struct ufat_file {
+	struct ufat		*uf;
+	ufat_cluster_t		start;
+	ufat_size_t		file_size;
+	ufat_cluster_t		cur_cluster;
+	ufat_size_t		cur_pos;
+};
+
+int ufat_open_file(struct ufat *uf, struct ufat_file *f,
+		   const struct ufat_dirent *ent);
+void ufat_file_rewind(struct ufat_file *f);
+int ufat_file_advance(struct ufat_file *f, ufat_size_t nbytes);
+int ufat_file_read(struct ufat_file *f, char *buf, ufat_size_t max_size);
 
 #endif
