@@ -40,6 +40,11 @@ int ufat_open_subdir(struct ufat *uf, struct ufat_directory *dir,
 	if (!(ent->attributes & UFAT_ATTR_DIRECTORY))
 		return -UFAT_ERR_NOT_DIRECTORY;
 
+	if (!ent->first_cluster) {
+		ufat_open_root(uf, dir);
+		return 0;
+	}
+
 	dir->start = cluster_to_block(&uf->bpb, ent->first_cluster);
 	dir->cur_block = dir->start;
 	dir->cur_pos = 0;
@@ -397,8 +402,12 @@ int ufat_dir_find_path(struct ufat_directory *dir,
 		at_root = 0;
 	}
 
-	if (at_root)
-		return -UFAT_ERR_BLANK_PATH;
+	if (at_root) {
+		/* Pseudo-dirent for root directory */
+		memset(ent, 0, sizeof(*ent));
+		ent->dirent_block = UFAT_BLOCK_NONE;
+		ent->attributes = UFAT_ATTR_DIRECTORY;
+	}
 
 	return 0;
 }

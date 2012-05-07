@@ -294,7 +294,6 @@ const char *ufat_strerror(int err)
 		[UFAT_ERR_INVALID_CLUSTER] = "Invalid cluster index",
 		[UFAT_ERR_NAME_TOO_LONG] = "Filename too long",
 		[UFAT_ERR_NOT_DIRECTORY] = "Not a directory",
-		[UFAT_ERR_BLANK_PATH] = "Blank path",
 		[UFAT_ERR_NOT_FILE] = "Not a file"
 	};
 
