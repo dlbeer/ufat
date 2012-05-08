@@ -50,6 +50,7 @@ struct command {
 struct file_device {
 	struct ufat_device	base;
 	FILE			*f;
+	int			is_read_only;
 };
 
 static int file_device_read(const struct ufat_device *dev, ufat_block_t start,
@@ -81,6 +82,11 @@ static int file_device_write(const struct ufat_device *dev, ufat_block_t start,
 {
 	struct file_device *f = (struct file_device *)dev;
 
+	if (f->is_read_only) {
+		fprintf(stderr, "file_device_write: read-only device\n");
+		return -1;
+	}
+
 	if (fseek(f->f, start << f->base.log2_block_size, SEEK_SET) < 0) {
 		perror("file_device_write: fseek");
 		return -1;
@@ -101,10 +107,13 @@ static int file_device_open(struct file_device *dev, const char *fname,
 	dev->base.log2_block_size = log2_bs;
 	dev->base.read = file_device_read;
 	dev->base.write = file_device_write;
+	dev->is_read_only = 0;
 
 	dev->f = fopen(fname, "r+");
-	if (!dev->f && errno == EACCES)
+	if (!dev->f && errno == EACCES) {
+		dev->is_read_only = 1;
 		dev->f = fopen(fname, "r");
+	}
 
 	if (!dev->f) {
 		perror("open");
@@ -181,7 +190,7 @@ static int cmd_dir(struct ufat *uf, const struct options *opt)
 
 	if (opt->argc) {
 		struct ufat_dirent ent;
-		int err = ufat_dir_find_path(&dir, opt->argv[0], &ent);
+		int err = ufat_dir_find_path(&dir, opt->argv[0], &ent, NULL);
 
 		if (err < 0) {
 			fprintf(stderr, "ufat_dir_find_path: %s\n",
@@ -218,7 +227,7 @@ static int cmd_fstat(struct ufat *uf, const struct options *opt)
 	}
 
 	ufat_open_root(uf, &dir);
-	err = ufat_dir_find_path(&dir, opt->argv[0], &ent);
+	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, NULL);
 
 	if (err < 0) {
 		fprintf(stderr, "ufat_dir_find_path: %s\n",
@@ -279,7 +288,7 @@ static int cmd_read(struct ufat *uf, const struct options *opt)
 	}
 
 	ufat_open_root(uf, &dir);
-	err = ufat_dir_find_path(&dir, opt->argv[0], &ent);
+	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, NULL);
 
 	if (err < 0) {
 		fprintf(stderr, "ufat_dir_find_path: %s\n",
@@ -323,6 +332,41 @@ static int cmd_read(struct ufat *uf, const struct options *opt)
 	return 0;
 }
 
+static int cmd_rm(struct ufat *uf, const struct options *opt)
+{
+	struct ufat_directory dir;
+	struct ufat_dirent ent;
+	int err;
+
+	if (!opt->argc) {
+		fprintf(stderr, "You must specify a file path\n");
+		return -1;
+	}
+
+	ufat_open_root(uf, &dir);
+	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, NULL);
+
+	if (err < 0) {
+		fprintf(stderr, "ufat_dir_find_path: %s\n",
+			ufat_strerror(err));
+		return -1;
+	}
+
+	if (err) {
+		fprintf(stderr, "No such file or directory: %s\n",
+			opt->argv[0]);
+		return -1;
+	}
+
+	err = ufat_dir_delete(uf, &ent);
+	if (err < 0) {
+		fprintf(stderr, "ufat_dir_delete: %s\n", ufat_strerror(err));
+		return -1;
+	}
+
+	return 0;
+}
+
 static void show_info(const struct ufat_bpb *bpb)
 {
 	printf("Type:                       FAT%d\n", bpb->type);
@@ -353,7 +397,8 @@ static void usage(const char *progname)
 "With no command, basic information is printed. Available commands are:\n"
 "  dir [directory]      Show a directory listing\n"
 "  fstat [path]         Show directory entry details\n"
-"  read [file]          Dump the contents of the given file\n",
+"  read [file]          Dump the contents of the given file\n"
+"  rm [path]            Remove a directory or file\n",
 progname);
 }
 
@@ -394,7 +439,8 @@ static int parse_blocksize(const char *arg, unsigned int *out)
 static const struct command command_table[] = {
 	{"dir",		cmd_dir},
 	{"fstat",	cmd_fstat},
-	{"read",	cmd_read}
+	{"read",	cmd_read},
+	{"rm",		cmd_rm}
 };
 
 static const struct command *find_command(const char *name)
@@ -485,21 +531,15 @@ static void dump_stats(const struct ufat_stat *st)
 {
 	fprintf(stderr, "\n");
 	fprintf(stderr,
-		"Reads:          %6d comprising %6d blocks\n",
+		"Reads:             %6d comprising %6d blocks\n",
 		st->read, st->read_blocks);
 	fprintf(stderr,
-		"Writes:         %6d comprising %6d blocks\n",
+		"Writes:            %6d comprising %6d blocks\n",
 		st->write, st->write_blocks);
 
-	fprintf(stderr,	"Cache writes:   %6d", st->cache_write);
-
-	if (st->write_blocks)
-		fprintf(stderr, " (%02d%% writeback rate)\n",
-			st->cache_write * 100 / st->write_blocks);
-	else
-		fprintf(stderr, "\n");
-
-	fprintf(stderr, "Cache hit/miss: %6d/%6d",
+	fprintf(stderr,	"Cache write/flush: %6d/%6d\n",
+		st->cache_write, st->cache_flush);
+	fprintf(stderr, "Cache hit/miss:    %6d/%6d",
 		st->cache_hit, st->cache_miss);
 
 	if (st->cache_hit + st->cache_miss)
@@ -538,10 +578,11 @@ int main(int argc, char **argv)
 		err = opt.command->func(&uf, &opt);
 	}
 
-	if (!err && (opt.flags & OPTION_STATISTICS))
-		dump_stats(&uf.stat);
-
 	ufat_close(&uf);
 	file_device_close(&dev);
+
+	if (opt.flags & OPTION_STATISTICS)
+		dump_stats(&uf.stat);
+
 	return err;
 }

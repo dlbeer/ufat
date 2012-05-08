@@ -81,21 +81,28 @@ static int next_block_in_chain(struct ufat *uf,
 	return 0;
 }
 
-static int read_raw_dirent(struct ufat_directory *dir, uint8_t *data)
+static int write_raw_dirent(struct ufat_directory *dir,
+			    const uint8_t *data, unsigned int len)
 {
 	int idx;
 
 	if (dir->cur_block == UFAT_BLOCK_NONE)
-		return 1;
+		return -UFAT_ERR_IO;
 
 	idx = ufat_cache_open(dir->uf, dir->cur_block);
 	if (idx < 0)
 		return idx;
 
-	memcpy(data, ufat_cache_data(dir->uf, idx) +
+	ufat_cache_write(dir->uf, idx);
+	memcpy(ufat_cache_data(dir->uf, idx) +
 	       dir->cur_pos * UFAT_DIRENT_SIZE,
-	       UFAT_DIRENT_SIZE);
+	       data, len);
 
+	return 0;
+}
+
+static int advance_raw_dirent(struct ufat_directory *dir)
+{
 	/* Advance the dirent pointer and check for a block overrun */
 	dir->cur_pos++;
 	if (dir->cur_pos * UFAT_DIRENT_SIZE >=
@@ -116,6 +123,24 @@ static int read_raw_dirent(struct ufat_directory *dir, uint8_t *data)
 				return err;
 		}
 	}
+
+	return 0;
+}
+
+static int read_raw_dirent(struct ufat_directory *dir, uint8_t *data)
+{
+	int idx;
+
+	if (dir->cur_block == UFAT_BLOCK_NONE)
+		return 1;
+
+	idx = ufat_cache_open(dir->uf, dir->cur_block);
+	if (idx < 0)
+		return idx;
+
+	memcpy(data, ufat_cache_data(dir->uf, idx) +
+	       dir->cur_pos * UFAT_DIRENT_SIZE,
+	       UFAT_DIRENT_SIZE);
 
 	return 0;
 }
@@ -318,6 +343,10 @@ int ufat_dir_read(struct ufat_directory *dir, struct ufat_dirent *inf,
 		if (err)
 			return err;
 
+		err = advance_raw_dirent(dir);
+		if (err)
+			return err;
+
 		if (data[0x0b] == 0x0f && data[0] != 0xe5) {
 			lfn_parse_ent(&lfn, data,
 				      inf->dirent_block, inf->dirent_pos);
@@ -348,6 +377,86 @@ int ufat_dir_read(struct ufat_directory *dir, struct ufat_dirent *inf,
 	return 0;
 }
 
+static int verify_empty_dir(struct ufat *uf, struct ufat_dirent *ent)
+{
+	struct ufat_directory dir;
+	int err;
+
+	err = ufat_open_subdir(uf, &dir, ent);
+	if (err < 0)
+		return err;
+
+	for (;;) {
+		struct ufat_dirent e;
+
+		err = ufat_dir_read(&dir, &e, NULL, 0);
+		if (err < 0)
+			return err;
+
+		if (err)
+			break;
+
+		if (e.short_name[0] != '.')
+			return -UFAT_ERR_DIRECTORY_NOT_EMPTY;
+	}
+
+	return 0;
+}
+
+static int delete_entry(struct ufat *uf, struct ufat_dirent *ent)
+{
+	const static uint8_t del_marker = 0xe5;
+	struct ufat_directory dir;
+
+	dir.uf = uf;
+
+	if (ent->lfn_block == UFAT_BLOCK_NONE) {
+		dir.cur_block = ent->dirent_block;
+		dir.cur_pos = ent->dirent_pos;
+	} else {
+		dir.cur_block = ent->lfn_block;
+		dir.cur_pos = ent->lfn_pos;
+	}
+
+	for (;;) {
+		int err;
+
+		err = write_raw_dirent(&dir, &del_marker, 1);
+		if (err < 0)
+			return -1;
+
+		if (dir.cur_block == ent->dirent_block &&
+		    dir.cur_pos == ent->dirent_pos)
+			break;
+
+		err = advance_raw_dirent(&dir);
+		if (err < 0)
+			return -1;
+	}
+
+	return 0;
+}
+
+int ufat_dir_delete(struct ufat *uf, struct ufat_dirent *ent)
+{
+	int err;
+
+	if (!ent->first_cluster || ent->short_name[0] == '.')
+		return -UFAT_ERR_IMMUTABLE;
+
+	if (ent->attributes & UFAT_ATTR_DIRECTORY) {
+		err = verify_empty_dir(uf, ent);
+		if (err < 0)
+			return err;
+	}
+
+	err = delete_entry(uf, ent);
+	if (err < 0)
+		return err;
+
+	return ufat_free_chain(uf, ent->first_cluster);
+}
+
 int ufat_dir_find(struct ufat_directory *dir,
 		  const char *target, struct ufat_dirent *inf)
 {
@@ -367,13 +476,13 @@ int ufat_dir_find(struct ufat_directory *dir,
 	return 0;
 }
 
+
 int ufat_dir_find_path(struct ufat_directory *dir,
-		       const char *path, struct ufat_dirent *ent)
+		       const char *path, struct ufat_dirent *ent,
+		       const char **path_out)
 {
-	struct ufat_directory dir_local;
 	int at_root = 1;
 
-	memcpy(&dir_local, dir, sizeof(dir_local));
 	ufat_dir_rewind(dir);
 
 	while (*path) {
@@ -390,8 +499,7 @@ int ufat_dir_find_path(struct ufat_directory *dir,
 
 		/* Descend if necessary */
 		if (!at_root) {
-			int err = ufat_open_subdir(dir_local.uf, &dir_local,
-						   ent);
+			int err = ufat_open_subdir(dir->uf, dir, ent);
 
 			if (err < 0)
 				return err;
@@ -400,11 +508,17 @@ int ufat_dir_find_path(struct ufat_directory *dir,
 		/* Search for this component */
 		for (;;) {
 			char name[UFAT_LFN_MAX_UTF8];
-			int err = ufat_dir_read(&dir_local, ent,
+			int err = ufat_dir_read(dir, ent,
 						name, sizeof(name));
 
-			if (err)
+			if (err < 0)
 				return err;
+
+			if (err) {
+				if (path_out)
+					*path_out = path;
+				return 1;
+			}
 
 			if (!strncasecmp(name, path, len) && !name[len])
 				break;

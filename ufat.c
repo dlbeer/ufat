@@ -34,6 +34,7 @@ static int cache_flush(struct ufat *uf, unsigned int cache_index)
 			   ufat_cache_data(uf, cache_index)) < 0)
 		return -UFAT_ERR_IO;
 
+	uf->stat.cache_flush++;
 	uf->stat.write++;
 	uf->stat.write_blocks++;
 
@@ -47,7 +48,7 @@ static int cache_flush(struct ufat *uf, unsigned int cache_index)
 
 		for (i = 1; i < uf->bpb.fat_count; i++) {
 			b += uf->bpb.fat_size;
-			uf->dev->write(uf->dev, d->index, 1,
+			uf->dev->write(uf->dev, b, 1,
 				       ufat_cache_data(uf, cache_index));
 
 			uf->stat.write++;
@@ -294,7 +295,9 @@ const char *ufat_strerror(int err)
 		[UFAT_ERR_INVALID_CLUSTER] = "Invalid cluster index",
 		[UFAT_ERR_NAME_TOO_LONG] = "Filename too long",
 		[UFAT_ERR_NOT_DIRECTORY] = "Not a directory",
-		[UFAT_ERR_NOT_FILE] = "Not a file"
+		[UFAT_ERR_NOT_FILE] = "Not a file",
+		[UFAT_ERR_IMMUTABLE] = "Can't delete/modify this entry",
+		[UFAT_ERR_DIRECTORY_NOT_EMPTY] = "Directory not empty"
 	};
 
 	if (err < 0)
@@ -379,6 +382,81 @@ int ufat_read_fat(struct ufat *uf, ufat_cluster_t index,
 	case UFAT_TYPE_FAT12: return read_fat12(uf, index, out);
 	case UFAT_TYPE_FAT16: return read_fat16(uf, index, out);
 	case UFAT_TYPE_FAT32: return read_fat32(uf, index, out);
+	}
+
+	return 0;
+}
+
+static int write_fat12(struct ufat *uf, ufat_cluster_t index,
+		       ufat_cluster_t in)
+{
+	// FIXME
+	return 0;
+}
+
+static int write_fat16(struct ufat *uf, ufat_cluster_t index,
+		       ufat_cluster_t in)
+{
+	const unsigned int shift = uf->dev->log2_block_size - 1;
+	const unsigned int b = index >> shift;
+	const unsigned int r = index & ((1 << shift) - 1);
+	int i = ufat_cache_open(uf, uf->bpb.fat_start + b);
+
+	if (i < 0)
+		return i;
+
+	ufat_cache_write(uf, i);
+	w16(ufat_cache_data(uf, i) + r * 2, in & 0xffff);
+
+	return 0;
+}
+
+static int write_fat32(struct ufat *uf, ufat_cluster_t index,
+		       ufat_cluster_t in)
+{
+	const unsigned int shift = uf->dev->log2_block_size - 2;
+	const unsigned int b = index >> shift;
+	const unsigned int r = index & ((1 << shift) - 1);
+	int i = ufat_cache_open(uf, uf->bpb.fat_start + b);
+
+	if (i < 0)
+		return i;
+
+	ufat_cache_write(uf, i);
+	w32(ufat_cache_data(uf, i) + r * 4, in);
+
+	return 0;
+}
+
+int ufat_write_fat(struct ufat *uf, ufat_cluster_t index,
+		   ufat_cluster_t in)
+{
+	if (index >= uf->bpb.num_clusters)
+		return -UFAT_ERR_INVALID_CLUSTER;
+
+	switch (uf->bpb.type) {
+	case UFAT_TYPE_FAT12: return write_fat12(uf, index, in);
+	case UFAT_TYPE_FAT16: return write_fat16(uf, index, in);
+	case UFAT_TYPE_FAT32: return write_fat32(uf, index, in);
+	}
+
+	return 0;
+}
+
+int ufat_free_chain(struct ufat *uf, ufat_cluster_t c)
+{
+	while (UFAT_CLUSTER_IS_PTR(c)) {
+		ufat_cluster_t next;
+		int i = ufat_read_fat(uf, c, &next);
+
+		if (i < 0)
+			return i;
+
+		i = ufat_write_fat(uf, c, UFAT_CLUSTER_FREE);
+		if (i < 0)
+			return i;
+
+		c = next;
 	}
 
 	return 0;

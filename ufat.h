@@ -70,6 +70,7 @@ struct ufat_stat {
 	unsigned int		cache_hit;
 	unsigned int		cache_miss;
 	unsigned int		cache_write;
+	unsigned int		cache_flush;
 };
 
 /* Data read/calculated from the BIOS Parameter Block (read-only) */
@@ -129,6 +130,8 @@ typedef enum {
 	UFAT_ERR_NAME_TOO_LONG,
 	UFAT_ERR_NOT_DIRECTORY,
 	UFAT_ERR_NOT_FILE,
+	UFAT_ERR_IMMUTABLE,
+	UFAT_ERR_DIRECTORY_NOT_EMPTY,
 	UFAT_MAX_ERR
 } ufat_error_t;
 
@@ -170,7 +173,12 @@ typedef uint16_t ufat_date_t;
 
 struct ufat_dirent {
 	ufat_block_t		dirent_block;
-	int			dirent_pos;
+	unsigned int		dirent_pos;
+
+	/* Start of LFN fragment chain, if any */
+	ufat_block_t		lfn_block;
+	unsigned int		lfn_pos;
+
 	char			short_name[9];
 	char			short_ext[4];
 
@@ -197,14 +205,18 @@ struct ufat_directory {
 void ufat_open_root(struct ufat *uf, struct ufat_directory *dir);
 int ufat_open_subdir(struct ufat *uf, struct ufat_directory *dir,
 		     const struct ufat_dirent *ent);
+
 void ufat_dir_rewind(struct ufat_directory *dir);
 int ufat_dir_read(struct ufat_directory *dir,
 		  struct ufat_dirent *inf,
 		  char *name_buf, int max_len);
+int ufat_dir_delete(struct ufat *uf, struct ufat_dirent *ent);
+
 int ufat_dir_find(struct ufat_directory *dir,
 		  const char *name, struct ufat_dirent *inf);
 int ufat_dir_find_path(struct ufat_directory *dir,
-		       const char *path, struct ufat_dirent *inf);
+		       const char *path, struct ufat_dirent *inf,
+		       const char **path_out);
 
 /* File IO */
 struct ufat_file {

@@ -40,6 +40,18 @@ static inline uint32_t r32(const uint8_t *offset)
 	return (h << 16) | l;
 }
 
+static inline void w16(uint8_t *offset, uint16_t value)
+{
+	offset[0] = value & 0xff;
+	offset[1] = value >> 8;
+}
+
+static inline void w32(uint8_t *offset, uint32_t value)
+{
+	w16(offset, value & 0xffff);
+	w16(offset + 2, value >> 16);
+}
+
 static inline ufat_block_t cluster_to_block(const struct ufat_bpb *bpb,
 					    ufat_cluster_t c)
 {
@@ -71,5 +83,10 @@ static inline uint8_t *ufat_cache_data(struct ufat *uf,
 /* FAT entry IO */
 int ufat_read_fat(struct ufat *uf, ufat_cluster_t index,
 		  ufat_cluster_t *out);
+int ufat_write_fat(struct ufat *uf, ufat_cluster_t index,
+		   ufat_cluster_t in);
+
+/* High-level FAT operations */
+int ufat_free_chain(struct ufat *uf, ufat_cluster_t start);
 
 #endif
