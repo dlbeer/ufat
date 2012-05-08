@@ -232,8 +232,13 @@ static int cmd_fstat(struct ufat *uf, const struct options *opt)
 		return -1;
 	}
 
-	printf("Entry block/offset:     %lld/%d\n",
+	printf("Entry block/offset:     %llu/%d\n",
 	       ent.dirent_block, ent.dirent_pos);
+
+	if (ent.lfn_block != UFAT_BLOCK_NONE)
+		printf("LFN start block/offset: %llu/%d\n",
+		       ent.lfn_block, ent.lfn_pos);
+
 	printf("Short name:             %s", ent.short_name);
 	if (ent.short_ext[0])
 		printf(".%s\n", ent.short_ext);

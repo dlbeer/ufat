@@ -121,6 +121,9 @@ static int read_raw_dirent(struct ufat_directory *dir, uint8_t *data)
 }
 
 struct lfn_state {
+	ufat_block_t	start_block;
+	unsigned int	start_pos;
+
 	int		len;
 	int		seq;
 	uint16_t	buf[UFAT_LFN_MAX_CHARS];
@@ -131,7 +134,8 @@ static inline void lfn_parse_reset(struct lfn_state *s)
 	s->seq = -1;
 }
 
-static void lfn_parse_ent(struct lfn_state *s, const uint8_t *data)
+static void lfn_parse_ent(struct lfn_state *s, const uint8_t *data,
+			  ufat_block_t blk, unsigned int pos)
 {
 	const int fr_seq = data[0];
 	uint16_t frag_data[13];
@@ -146,6 +150,8 @@ static void lfn_parse_ent(struct lfn_state *s, const uint8_t *data)
 
 	/* Check against expected sequence number */
 	if (fr_seq & 0x40) {
+		s->start_block = blk;
+		s->start_pos = pos;
 		s->seq = fr_seq & 0x3f;
 		s->len = fr_pos + fr_len;
 	} else if (fr_seq != s->seq) {
@@ -313,12 +319,21 @@ int ufat_dir_read(struct ufat_directory *dir, struct ufat_dirent *inf,
 			return err;
 
 		if (data[0x0b] == 0x0f && data[0] != 0xe5) {
-			lfn_parse_ent(&lfn, data);
+			lfn_parse_ent(&lfn, data,
+				      inf->dirent_block, inf->dirent_pos);
 		} else if (data[0] && data[0] != 0xe5) {
 			parse_dirent(dir->uf->bpb.type, data, inf);
 
 			if (inf->attributes & 0x08)
 				continue;
+
+			if (lfn_parse_ok(&lfn)) {
+				inf->lfn_block = lfn.start_block;
+				inf->lfn_pos = lfn.start_pos;
+			} else {
+				inf->lfn_block = UFAT_BLOCK_NONE;
+				inf->lfn_pos = 0;
+			}
 
 			if (lfn_buf &&
 			    format_name(&lfn, inf, lfn_buf, max_len) < 0)
