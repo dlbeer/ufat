@@ -114,6 +114,7 @@ struct ufat {
 
 	unsigned int			next_seq;
 	unsigned int			cache_size;
+	ufat_cluster_t			alloc_ptr;
 
 	struct ufat_cache_desc		cache_desc[UFAT_CACHE_MAX_BLOCKS];
 	uint8_t				cache_data[UFAT_CACHE_BYTES];
@@ -132,6 +133,11 @@ typedef enum {
 	UFAT_ERR_NOT_FILE,
 	UFAT_ERR_IMMUTABLE,
 	UFAT_ERR_DIRECTORY_NOT_EMPTY,
+	UFAT_ERR_ILLEGAL_NAME,
+	UFAT_ERR_FILE_EXISTS,
+	UFAT_ERR_BAD_ENCODING,
+	UFAT_ERR_DIRECTORY_FULL,
+	UFAT_ERR_NO_CLUSTERS,
 	UFAT_MAX_ERR
 } ufat_error_t;
 
@@ -188,6 +194,7 @@ struct ufat_dirent {
 	ufat_date_t		modify_date;
 	ufat_time_t		modify_time;
 	ufat_date_t		access_date;
+
 	ufat_cluster_t		first_cluster;
 	ufat_size_t		file_size;
 };
@@ -211,6 +218,8 @@ int ufat_dir_read(struct ufat_directory *dir,
 		  struct ufat_dirent *inf,
 		  char *name_buf, int max_len);
 int ufat_dir_delete(struct ufat *uf, struct ufat_dirent *ent);
+int ufat_dir_create(struct ufat_directory *dir, struct ufat_dirent *ent,
+		    const char *name);
 
 int ufat_dir_find(struct ufat_directory *dir,
 		  const char *name, struct ufat_dirent *inf);

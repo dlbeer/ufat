@@ -23,6 +23,8 @@
 #include <getopt.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
+#include <sys/time.h>
 #include "ufat.h"
 
 struct command;
@@ -367,6 +369,54 @@ static int cmd_rm(struct ufat *uf, const struct options *opt)
 	return 0;
 }
 
+static int cmd_mkdir(struct ufat *uf, const struct options *opt)
+{
+	const char *basename;
+	struct ufat_directory dir;
+	struct ufat_dirent ent;
+	struct tm *local;
+	time_t now = time(NULL);
+	int err;
+
+	if (!opt->argc) {
+		fprintf(stderr, "You must specify a file path\n");
+		return -1;
+	}
+
+	ufat_open_root(uf, &dir);
+	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, &basename);
+
+	if (err < 0) {
+		fprintf(stderr, "ufat_dir_find_path: %s\n",
+			ufat_strerror(err));
+		return -1;
+	}
+
+	if (!err) {
+		fprintf(stderr, "Path already exists: %s\n",
+			opt->argv[0]);
+		return -1;
+	}
+
+	local = localtime(&now);
+	ent.attributes = UFAT_ATTR_ARCHIVE;
+	ent.create_date = UFAT_DATE(local->tm_year + 1900, local->tm_mon + 1,
+				    local->tm_mday);
+	ent.create_time = UFAT_TIME(local->tm_hour, local->tm_min,
+				    local->tm_sec);
+	ent.modify_date = ent.create_date;
+	ent.modify_time = ent.create_time;
+	ent.access_date = ent.create_date;
+
+	err = ufat_dir_create(&dir, &ent, basename);
+	if (err < 0) {
+		fprintf(stderr, "ufat_dir_create: %s\n", ufat_strerror(err));
+		return -1;
+	}
+
+	return 0;
+}
+
 static void show_info(const struct ufat_bpb *bpb)
 {
 	printf("Type:                       FAT%d\n", bpb->type);
@@ -398,7 +448,8 @@ static void usage(const char *progname)
 "  dir [directory]      Show a directory listing\n"
 "  fstat [path]         Show directory entry details\n"
 "  read [file]          Dump the contents of the given file\n"
-"  rm [path]            Remove a directory or file\n",
+"  rm [path]            Remove a directory or file\n"
+"  mkdir [directory]    Create a new empty directory\n",
 progname);
 }
 
@@ -440,7 +491,8 @@ static const struct command command_table[] = {
 	{"dir",		cmd_dir},
 	{"fstat",	cmd_fstat},
 	{"read",	cmd_read},
-	{"rm",		cmd_rm}
+	{"rm",		cmd_rm},
+	{"mkdir",	cmd_mkdir}
 };
 
 static const struct command *find_command(const char *name)

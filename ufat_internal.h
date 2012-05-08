@@ -88,5 +88,6 @@ int ufat_write_fat(struct ufat *uf, ufat_cluster_t index,
 
 /* High-level FAT operations */
 int ufat_free_chain(struct ufat *uf, ufat_cluster_t start);
+int ufat_alloc_chain(struct ufat *uf, unsigned int count, ufat_cluster_t *out);
 
 #endif

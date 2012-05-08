@@ -297,7 +297,12 @@ const char *ufat_strerror(int err)
 		[UFAT_ERR_NOT_DIRECTORY] = "Not a directory",
 		[UFAT_ERR_NOT_FILE] = "Not a file",
 		[UFAT_ERR_IMMUTABLE] = "Can't delete/modify this entry",
-		[UFAT_ERR_DIRECTORY_NOT_EMPTY] = "Directory not empty"
+		[UFAT_ERR_DIRECTORY_NOT_EMPTY] = "Directory not empty",
+		[UFAT_ERR_ILLEGAL_NAME] = "Illegal filename",
+		[UFAT_ERR_FILE_EXISTS] = "File already exists",
+		[UFAT_ERR_BAD_ENCODING] = "Bad encoding",
+		[UFAT_ERR_DIRECTORY_FULL] = "Directory is full",
+		[UFAT_ERR_NO_CLUSTERS] = "No free clusters"
 	};
 
 	if (err < 0)
@@ -459,5 +464,50 @@ int ufat_free_chain(struct ufat *uf, ufat_cluster_t c)
 		c = next;
 	}
 
+	return 0;
+}
+
+static int alloc_cluster(struct ufat *uf, ufat_cluster_t *out,
+			 ufat_cluster_t tail)
+{
+	const unsigned int total = uf->bpb.num_clusters - 2;
+	unsigned int i;
+
+	for (i = 0; i < total; i++) {
+		const ufat_cluster_t idx = uf->alloc_ptr + 2;
+		ufat_cluster_t c;
+
+		uf->alloc_ptr = (uf->alloc_ptr + 1) % total;
+
+		if (!ufat_read_fat(uf, idx, &c) && c == UFAT_CLUSTER_FREE) {
+			int err = ufat_write_fat(uf, idx, tail);
+
+			if (err < 0)
+				return err;
+
+			*out = idx;
+			return 0;
+		}
+	}
+
+	return -UFAT_ERR_NO_CLUSTERS;
+}
+
+int ufat_alloc_chain(struct ufat *uf, unsigned int count, ufat_cluster_t *out)
+{
+	ufat_cluster_t chain = UFAT_CLUSTER_EOC;
+
+	while (count) {
+		int err = alloc_cluster(uf, &chain, chain);
+
+		if (err < 0) {
+			ufat_free_chain(uf, chain);
+			return err;
+		}
+
+		count--;
+	}
+
+	*out = chain;
 	return 0;
 }
