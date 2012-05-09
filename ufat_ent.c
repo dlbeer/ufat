@@ -424,11 +424,6 @@ void ufat_lfn_parse(struct ufat_lfn_parser *s, const uint8_t *data,
 
 	for (i = 0; i < fr_len; i++)
 		s->buf[fr_pos + i] = frag_data[i];
-
-	/* Trim trailing spaces */
-	if (fr_seq & 0x40)
-		while (s->len && s->buf[s->len - 1] == ' ')
-			s->len--;
 }
 
 int ufat_ucs2_to_utf8(const uint16_t *src, int src_len,
@@ -437,7 +432,7 @@ int ufat_ucs2_to_utf8(const uint16_t *src, int src_len,
 	int i;
 	int j = 0;
 
-	for (i = 0; i < src_len; i++) {
+	for (i = 0; i < src_len && src[i]; i++) {
 		uint16_t c = src[i];
 
 		if (c >= 0x800) {
@@ -533,9 +528,9 @@ int ufat_utf8_to_ucs2(const char *src, uint16_t *dst)
 	if (*src)
 		return -UFAT_ERR_NAME_TOO_LONG;
 
-	/* Pad out with spaces */
+	/* Pad out to full length */
 	for (i = len; i < UFAT_LFN_MAX_CHARS; i++)
-		dst[i] = 0x20;
+		dst[i] = 0;
 
 	return len;
 }
