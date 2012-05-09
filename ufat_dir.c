@@ -106,8 +106,15 @@ int ufat_dir_read(struct ufat_directory *dir, struct ufat_dirent *inf,
 		} else if (data[0] && data[0] != 0xe5) {
 			ufat_parse_dirent(dir->uf->bpb.type, data, inf);
 
-			if (inf->attributes & 0x08)
+			if (ufat_short_checksum(inf->short_name,
+						inf->short_ext) !=
+			    lfn.short_checksum)
+				ufat_lfn_reset(&lfn);
+
+			if (inf->attributes & 0x08) {
+				ufat_lfn_reset(&lfn);
 				continue;
+			}
 
 			if (ufat_lfn_ok(&lfn)) {
 				inf->lfn_block = lfn.start_block;

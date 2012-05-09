@@ -95,6 +95,8 @@ struct ufat_lfn_parser {
 	ufat_block_t	start_block;
 	unsigned int	start_pos;
 
+	uint8_t		short_checksum;
+
 	int		len;
 	int		seq;
 	uint16_t	buf[UFAT_LFN_MAX_CHARS];

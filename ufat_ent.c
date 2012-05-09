@@ -402,13 +402,15 @@ void ufat_lfn_parse(struct ufat_lfn_parser *s, const uint8_t *data,
 	if (fr_pos + fr_len > UFAT_LFN_MAX_CHARS)
 		fr_len = UFAT_LFN_MAX_CHARS - fr_pos;
 
-	/* Check against expected sequence number */
+	/* Check against expected sequence number and checksum */
 	if (fr_seq & 0x40) {
 		s->start_block = blk;
 		s->start_pos = pos;
 		s->seq = fr_seq & 0x3f;
 		s->len = fr_pos + fr_len;
-	} else if (fr_seq != s->seq) {
+		s->short_checksum = data[0x0d];
+	} else if (fr_seq != s->seq ||
+		   s->short_checksum != data[0x0d]) {
 		ufat_lfn_reset(s);
 		return;
 	}
