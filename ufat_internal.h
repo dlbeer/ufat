@@ -90,4 +90,58 @@ int ufat_write_fat(struct ufat *uf, ufat_cluster_t index,
 int ufat_free_chain(struct ufat *uf, ufat_cluster_t start);
 int ufat_alloc_chain(struct ufat *uf, unsigned int count, ufat_cluster_t *out);
 
+/* LFN handling */
+struct ufat_lfn_parser {
+	ufat_block_t	start_block;
+	unsigned int	start_pos;
+
+	int		len;
+	int		seq;
+	uint16_t	buf[UFAT_LFN_MAX_CHARS];
+};
+
+static inline void ufat_lfn_reset(struct ufat_lfn_parser *s)
+{
+	s->seq = -1;
+}
+
+static inline int ufat_lfn_ok(const struct ufat_lfn_parser *s)
+{
+	return s->seq == 0;
+}
+
+void ufat_lfn_parse(struct ufat_lfn_parser *s, const uint8_t *data,
+		    ufat_block_t blk, unsigned int pos);
+int ufat_lfn_is_legal(const char *name);
+void ufat_lfn_pack_fragment(const uint16_t *ucs, int seq, int is_first,
+			    uint8_t *data, uint8_t checksum);
+
+/* Raw dirent IO */
+int ufat_write_raw_dirent(struct ufat_directory *dir,
+			  const uint8_t *data, unsigned int len);
+int ufat_read_raw_dirent(struct ufat_directory *dir, uint8_t *data);
+int ufat_advance_raw_dirent(struct ufat_directory *dir, int can_alloc);
+int ufat_allocate_raw_dirent(struct ufat_directory *dir, unsigned int count);
+int ufat_init_dirent_cluster(struct ufat *uf, ufat_cluster_t c);
+
+/* Dirent parsing/packing */
+void ufat_parse_dirent(ufat_fat_type_t type,
+		       const uint8_t *data, struct ufat_dirent *inf);
+void ufat_pack_dirent(const struct ufat_dirent *ent, uint8_t *data);
+
+/* Charset conversion */
+int ufat_ucs2_to_utf8(const uint16_t *src, int src_len,
+		      char *dst, int dst_len);
+int ufat_utf8_to_ucs2(const char *src, uint16_t *dst);
+
+/* Short name functions */
+void ufat_short_first(const char *long_name,
+		      char *short_name, char *ext_text);
+void ufat_short_next(char *short_name);
+int ufat_short_exists(struct ufat_directory *dir, const char *short_name,
+		      const char *short_ext);
+uint8_t ufat_short_checksum(const char *short_name, const char *short_ext);
+int ufat_format_short(const char *name, const char *ext,
+		      char *out, int max_len);
+
 #endif
