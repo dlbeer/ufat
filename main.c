@@ -399,7 +399,7 @@ static int cmd_mkdir(struct ufat *uf, const struct options *opt)
 	}
 
 	local = localtime(&now);
-	ent.attributes = UFAT_ATTR_ARCHIVE;
+	ent.attributes = 0;
 	ent.create_date = UFAT_DATE(local->tm_year + 1900, local->tm_mon + 1,
 				    local->tm_mday);
 	ent.create_time = UFAT_TIME(local->tm_hour, local->tm_min,
