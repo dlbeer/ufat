@@ -310,6 +310,9 @@ static int insert_dirent(struct ufat_directory *dir, struct ufat_dirent *ent,
 	if (err < 0)
 		return -1;
 
+	ent->lfn_block = dir->cur_block;
+	ent->lfn_pos = dir->cur_pos;
+
 	/* Write LFN fragments and the DOS dirent */
 	for (i = 0; i < num_lfn_frags; i++) {
 		ufat_lfn_pack_fragment(ucs2_name + (num_lfn_frags - i - 1) * 13,
@@ -326,6 +329,9 @@ static int insert_dirent(struct ufat_directory *dir, struct ufat_dirent *ent,
 	}
 
 	ufat_pack_dirent(ent, data);
+	ent->dirent_block = dir->cur_block;
+	ent->dirent_pos = dir->cur_pos;
+
 	return ufat_write_raw_dirent(dir, data, sizeof(data));
 }
 
@@ -354,6 +360,28 @@ int ufat_dir_create(struct ufat_directory *dir, struct ufat_dirent *ent,
 		ufat_free_chain(dir->uf, ent->first_cluster);
 		return err;
 	}
+
+	return 0;
+}
+
+int ufat_dir_mkfile(struct ufat_directory *dir, struct ufat_dirent *ent,
+		    const char *name)
+{
+	struct ufat_dirent check;
+	int err;
+	if (!ufat_lfn_is_legal(name))
+		return -UFAT_ERR_ILLEGAL_NAME;
+
+	if (!ufat_dir_find(dir, name, &check))
+		return -UFAT_ERR_FILE_EXISTS;
+
+	ent->file_size = 0;
+	ent->first_cluster = 0;
+	ent->attributes &= UFAT_ATTR_USER;
+
+	err = insert_dirent(dir, ent, name);
+	if (err < 0)
+		return err;
 
 	return 0;
 }

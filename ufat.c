@@ -60,6 +60,27 @@ static int cache_flush(struct ufat *uf, unsigned int cache_index)
 	return 0;
 }
 
+int ufat_cache_evict(struct ufat *uf, ufat_block_t start, ufat_block_t count)
+{
+	int i;
+
+	for (i = 0; i < uf->cache_size; i++) {
+		struct ufat_cache_desc *d = &uf->cache_desc[i];
+
+		if ((d->flags & UFAT_CACHE_FLAG_PRESENT) &&
+		    d->index >= start && d->index < start + count) {
+			int err = cache_flush(uf, i);
+
+			if (err < 0)
+				return err;
+
+			d->flags = 0;
+		}
+	}
+
+	return 0;
+}
+
 int ufat_cache_open(struct ufat *uf, ufat_block_t blk_index)
 {
 	unsigned int i;

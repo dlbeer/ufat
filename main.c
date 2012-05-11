@@ -328,7 +328,96 @@ static int cmd_read(struct ufat *uf, const struct options *opt)
 		if (!len)
 			break;
 
-		fwrite(buf, len, 1, stdout);
+		if (fwrite(buf, 1, len, stdout) != len) {
+			perror("fwrite");
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+static int cmd_write(struct ufat *uf, const struct options *opt)
+{
+	const char *basename;
+	struct ufat_directory dir;
+	struct ufat_dirent ent;
+	struct ufat_file file;
+	int err;
+
+	if (!opt->argc) {
+		fprintf(stderr, "You must specify a file path\n");
+		return -1;
+	}
+
+	ufat_open_root(uf, &dir);
+	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, &basename);
+
+	if (err < 0) {
+		fprintf(stderr, "ufat_dir_find_path: %s\n",
+			ufat_strerror(err));
+		return -1;
+	}
+
+	if (err) {
+		time_t now = time(NULL);
+		struct tm *local = localtime(&now);
+
+		ent.attributes = 0;
+		ent.create_date = UFAT_DATE(local->tm_year + 1900,
+					    local->tm_mon + 1,
+					    local->tm_mday);
+		ent.create_time = UFAT_TIME(local->tm_hour,
+					    local->tm_min,
+					    local->tm_sec);
+		ent.modify_date = ent.create_date;
+		ent.modify_time = ent.create_time;
+		ent.access_date = ent.create_date;
+
+		err = ufat_dir_mkfile(&dir, &ent, basename);
+		if (err < 0) {
+			fprintf(stderr, "Failed to create file: %s: %s\n",
+				basename, ufat_strerror(err));
+			return -1;
+		}
+	}
+
+	err = ufat_open_file(uf, &file, &ent);
+	if (err < 0) {
+		fprintf(stderr, "ufat_open_file: %s\n", ufat_strerror(err));
+		return -1;
+	}
+
+	for (;;) {
+		char buf[16384];
+		int req_size = sizeof(buf);
+		int len;
+
+		if (opt->flags & OPTION_RANDOMIZE)
+			req_size = random() % sizeof(buf) + 1;
+
+		len = fread(buf, 1, req_size, stdin);
+		if (ferror(stdin)) {
+			perror("fread");
+			return -1;
+		}
+
+		if (!len)
+			break;
+
+		len = ufat_file_write(&file, buf, len);
+		if (len < 0) {
+			fprintf(stderr, "ufat_file_write: %s\n",
+				ufat_strerror(len));
+			return -1;
+		}
+	}
+
+	err = ufat_file_truncate(&file);
+	if (err < 0) {
+		fprintf(stderr, "ufat_file_truncate: %s\n",
+			ufat_strerror(err));
+		return -1;
 	}
 
 	return 0;
@@ -448,6 +537,7 @@ static void usage(const char *progname)
 "  dir [directory]      Show a directory listing\n"
 "  fstat [path]         Show directory entry details\n"
 "  read [file]          Dump the contents of the given file\n"
+"  write [file]         Write to a file\n"
 "  rm [path]            Remove a directory or file\n"
 "  mkdir [directory]    Create a new empty directory\n",
 progname);
@@ -491,6 +581,7 @@ static const struct command command_table[] = {
 	{"dir",		cmd_dir},
 	{"fstat",	cmd_fstat},
 	{"read",	cmd_read},
+	{"write",	cmd_write},
 	{"rm",		cmd_rm},
 	{"mkdir",	cmd_mkdir}
 };

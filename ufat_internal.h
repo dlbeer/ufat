@@ -67,6 +67,7 @@ static inline ufat_cluster_t block_to_cluster(const struct ufat_bpb *bpb,
 
 /* Block IO via internal cache */
 int ufat_cache_open(struct ufat *uf, ufat_block_t blk_index);
+int ufat_cache_evict(struct ufat *uf, ufat_block_t start, ufat_block_t count);
 
 static inline void ufat_cache_write(struct ufat *uf, unsigned int cache_index)
 {
