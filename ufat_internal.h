@@ -24,6 +24,9 @@
 #define UFAT_CLUSTER_MASK		0x0fffffff
 #define UFAT_DIRENT_SIZE		32
 
+#define UFAT_MAX_FAT12			0xff6
+#define UFAT_MAX_FAT16			0xfff6
+
 static inline uint16_t r16(const uint8_t *offset)
 {
 	const uint16_t l = offset[0];

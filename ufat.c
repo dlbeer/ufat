@@ -244,7 +244,7 @@ static int parse_bpb(unsigned int log2_bytes_per_block,
 		ufb->type = UFAT_TYPE_FAT32;
 	} else {
 		ufb->root_cluster = 0;
-		if (ufb->num_clusters < 4085)
+		if (ufb->num_clusters <= UFAT_MAX_FAT12)
 			ufb->type = UFAT_TYPE_FAT12;
 		else
 			ufb->type = UFAT_TYPE_FAT16;

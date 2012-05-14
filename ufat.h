@@ -253,4 +253,7 @@ int ufat_file_read(struct ufat_file *f, char *buf, ufat_size_t max_size);
 int ufat_file_write(struct ufat_file *f, const char *buf, ufat_size_t len);
 int ufat_file_truncate(struct ufat_file *f);
 
+/* Filesystem creation */
+int ufat_mkfs(struct ufat_device *dev, ufat_block_t nblk);
+
 #endif

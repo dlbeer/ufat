@@ -31,11 +31,13 @@ struct command;
 
 #define OPTION_STATISTICS	0x01
 #define OPTION_RANDOMIZE	0x02
+#define OPTION_MKFS		0x04
 
 struct options {
 	int			flags;
 	unsigned int		log2_bs;
 	unsigned int		seed;
+	ufat_block_t		num_blocks;
 
 	const char		*filename;
 	const struct command	*command;
@@ -67,13 +69,13 @@ static int file_device_read(const struct ufat_device *dev, ufat_block_t start,
 
 	if (fread(buffer, 1 << f->base.log2_block_size,
 		  count, f->f) != count) {
-		if (feof(f->f))
-			fprintf(stderr, "file_device_read: "
-				"read out of bounds\n");
-		else
+		if (feof(f->f)) {
+			memset(buffer, 0xcc,
+			       (1 << f->base.log2_block_size) * count);
+		} else {
 			perror("file_device_read: fread");
-
-		return -1;
+			return -1;
+		}
 	}
 
 	return 0;
@@ -95,7 +97,7 @@ static int file_device_write(const struct ufat_device *dev, ufat_block_t start,
 	}
 
 	if (fwrite(buffer, 1 << f->base.log2_block_size,
-		  count, f->f) != count) {
+		   count, f->f) != count) {
 		perror("file_device_write: fwrite");
 		return -1;
 	}
@@ -104,17 +106,21 @@ static int file_device_write(const struct ufat_device *dev, ufat_block_t start,
 }
 
 static int file_device_open(struct file_device *dev, const char *fname,
-			    unsigned int log2_bs)
+			    unsigned int log2_bs, int create)
 {
 	dev->base.log2_block_size = log2_bs;
 	dev->base.read = file_device_read;
 	dev->base.write = file_device_write;
 	dev->is_read_only = 0;
 
-	dev->f = fopen(fname, "r+");
-	if (!dev->f && errno == EACCES) {
-		dev->is_read_only = 1;
-		dev->f = fopen(fname, "r");
+	if (create) {
+		dev->f = fopen(fname, "wb+");
+	} else {
+		dev->f = fopen(fname, "rb+");
+		if (!dev->f && errno == EACCES) {
+			dev->is_read_only = 1;
+			dev->f = fopen(fname, "rb");
+		}
 	}
 
 	if (!dev->f) {
@@ -530,6 +536,8 @@ static void usage(const char *progname)
 "  -b block-size        Set the simulated block size\n"
 "  -S                   Show performance statistics\n"
 "  -R seed              Randomize file IO request sizes\n"
+"  --mkfs <num blocks>  Initialize the filesystem (WARNING: all existing data\n"
+"                       will be lost).\n"
 "  --help               Show this text\n"
 "  --version            Show version information\n"
 "\n"
@@ -606,6 +614,7 @@ static int parse_options(int argc, char **argv, struct options *opt)
 	static const struct option longopts[] = {
 		{"help",	0, 0, 'H'},
 		{"version",	0, 0, 'V'},
+		{"mkfs",	1, 0, 'M'},
 		{NULL, 0, 0, 0}
 	};
 	int o;
@@ -615,6 +624,11 @@ static int parse_options(int argc, char **argv, struct options *opt)
 
 	while ((o = getopt_long(argc, argv, "b:SR:", longopts, NULL)) >= 0)
 		switch (o) {
+		case 'M':
+			opt->flags |= OPTION_MKFS;
+			opt->num_blocks = atoll(optarg);
+			break;
+
 		case 'R':
 			opt->flags |= OPTION_RANDOMIZE;
 			opt->seed = atoi(optarg);
@@ -704,8 +718,18 @@ int main(int argc, char **argv)
 
 	srandom(opt.seed);
 
-	if (file_device_open(&dev, opt.filename, opt.log2_bs) < 0)
+	if (file_device_open(&dev, opt.filename, opt.log2_bs,
+			     opt.flags & OPTION_MKFS) < 0)
 		return -1;
+
+	if (opt.flags & OPTION_MKFS) {
+		err = ufat_mkfs(&dev.base, opt.num_blocks);
+		if (err < 0) {
+			fprintf(stderr, "ufat_mkfs: %s\n", ufat_strerror(err));
+			file_device_close(&dev);
+			return -1;
+		}
+	}
 
 	err = ufat_open(&uf, &dev.base);
 	if (err) {
