@@ -64,18 +64,13 @@ static int format_name(const struct ufat_lfn_parser *lfn,
 		       const struct ufat_dirent *inf,
 		       char *lfn_buf, int max_len)
 {
-	if (ufat_lfn_ok(lfn)) {
-		if (ufat_ucs2_to_utf8(lfn->buf, lfn->len,
-				      lfn_buf, max_len) < 0)
-			return -UFAT_ERR_NAME_TOO_LONG;
-	} else {
-		if (ufat_format_short(inf->short_name,
-				      inf->short_ext,
-				      lfn_buf, max_len) < 0)
-			return -UFAT_ERR_NAME_TOO_LONG;
-	}
+	if (ufat_lfn_ok(lfn))
+		return ufat_ucs2_to_utf8(lfn->buf, lfn->len,
+					 lfn_buf, max_len);
 
-	return 0;
+	return ufat_format_short(inf->short_name,
+				 inf->short_ext,
+				 lfn_buf, max_len);
 }
 
 int ufat_dir_read(struct ufat_directory *dir, struct ufat_dirent *inf,
@@ -124,9 +119,8 @@ int ufat_dir_read(struct ufat_directory *dir, struct ufat_dirent *inf,
 				inf->lfn_pos = 0;
 			}
 
-			if (lfn_buf &&
-			    format_name(&lfn, inf, lfn_buf, max_len) < 0)
-				return -UFAT_ERR_NAME_TOO_LONG;
+			if (lfn_buf)
+				return format_name(&lfn, inf, lfn_buf, max_len);
 
 			return 0;
 		} else {
@@ -183,7 +177,7 @@ static int delete_entry(struct ufat *uf, struct ufat_dirent *ent)
 
 		err = ufat_write_raw_dirent(&dir, &del_marker, 1);
 		if (err < 0)
-			return -1;
+			return err;
 
 		if (dir.cur_block == ent->dirent_block &&
 		    dir.cur_pos == ent->dirent_pos)
@@ -191,7 +185,7 @@ static int delete_entry(struct ufat *uf, struct ufat_dirent *ent)
 
 		err = ufat_advance_raw_dirent(&dir, 0);
 		if (err < 0)
-			return -1;
+			return err;
 	}
 
 	return 0;
@@ -308,7 +302,7 @@ static int insert_dirent(struct ufat_directory *dir, struct ufat_dirent *ent,
 	/* Find a space in the directory */
 	err = ufat_allocate_raw_dirent(dir, num_lfn_frags + 1);
 	if (err < 0)
-		return -1;
+		return err;
 
 	ent->lfn_block = dir->cur_block;
 	ent->lfn_pos = dir->cur_pos;
@@ -369,6 +363,7 @@ int ufat_dir_mkfile(struct ufat_directory *dir, struct ufat_dirent *ent,
 {
 	struct ufat_dirent check;
 	int err;
+
 	if (!ufat_lfn_is_legal(name))
 		return -UFAT_ERR_ILLEGAL_NAME;
 

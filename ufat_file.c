@@ -332,7 +332,7 @@ static int write_blocks(struct ufat_file *f, const char *buf, ufat_size_t size)
 
 	i = ensure_room(f);
 	if (i < 0)
-		return -1;
+		return i;
 
 	/* We're writing contiguous whole blocks, so we can bypass the
 	 * cache and perform a single large write.

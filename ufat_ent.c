@@ -152,7 +152,7 @@ int ufat_allocate_raw_dirent(struct ufat_directory *dir, unsigned int count)
 
 		err = ufat_read_raw_dirent(dir, data);
 		if (err < 0)
-			return -1;
+			return err;
 
 		/* Check to see if this raw dirent is empty. Keep track
 		 * of contiguous chains of empty dirents.
@@ -174,7 +174,7 @@ int ufat_allocate_raw_dirent(struct ufat_directory *dir, unsigned int count)
 
 		err = ufat_advance_raw_dirent(dir, 1);
 		if (err < 0)
-			return -1;
+			return err;
 
 		if (dir->cur_block == UFAT_BLOCK_NONE)
 			return -UFAT_ERR_DIRECTORY_FULL;
@@ -305,6 +305,7 @@ void ufat_short_first(const char *long_name,
 
 	while (ext >= 0 && long_name[ext] != '.')
 		ext--;
+
 	if (ext > 0)
 		ext++;
 	else
@@ -326,6 +327,7 @@ void ufat_short_first(const char *long_name,
 		if (is_legal_dos_char(c))
 			short_name[j++] = toupper(c);
 	}
+	short_name[j] = 0;
 
 	if (!j) {
 		for (i = 0; i < 8; i++)
@@ -439,27 +441,27 @@ int ufat_ucs2_to_utf8(const uint16_t *src, int src_len,
 
 		if (c >= 0x800) {
 			if (j + 3 >= dst_len)
-				return -1;
+				return -UFAT_ERR_BAD_ENCODING;
 
 			dst[j++] = 0xe0 | (c >> 12);
 			dst[j++] = 0x80 | ((c >> 6) & 0x3f);
 			dst[j++] = 0x80 | (c & 0x3f);
 		} else if (c >= 0x80) {
 			if (j + 2 >= dst_len)
-				return -1;
+				return -UFAT_ERR_BAD_ENCODING;
 
 			dst[j++] = 0xc0 | c >> 6;
 			dst[j++] = 0x80 | (c & 0x3f);
 		} else {
 			if (j + 1 >= dst_len)
-				return -1;
+				return -UFAT_ERR_BAD_ENCODING;
 
 			dst[j++] = c;
 		}
 	}
 
 	if (j >= dst_len)
-		return -1;
+		return -UFAT_ERR_NAME_TOO_LONG;
 
 	dst[j] = 0;
 	return 0;
@@ -582,7 +584,7 @@ int ufat_format_short(const char *name, const char *ext,
 
 		while (*ext) {
 			if (i >= max_len)
-				return -1;
+				return -UFAT_ERR_NAME_TOO_LONG;
 			out[i++] = *(ext++);
 		}
 	}
