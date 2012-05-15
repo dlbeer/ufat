@@ -335,11 +335,61 @@ const char *ufat_strerror(int err)
 	return text[err];
 }
 
+static int read_fat_byte(struct ufat *uf, unsigned int offset, uint8_t *out)
+{
+	ufat_block_t b = offset >> uf->dev->log2_block_size;
+	unsigned int r = offset & ((1 << uf->dev->log2_block_size) - 1);
+	int idx;
+
+	idx = ufat_cache_open(uf, uf->bpb.fat_start + b);
+	if (idx < 0)
+		return idx;
+
+	*out = ufat_cache_data(uf, idx)[r];
+	return 0;
+}
+
 static int read_fat12(struct ufat *uf, ufat_cluster_t index,
 		      ufat_cluster_t *out)
 {
-	// FIXME
-	return -1;
+	unsigned int offset = (index >> 1) * 3;
+	uint8_t a;
+	uint8_t b;
+	uint16_t raw;
+	int err;
+
+	err = read_fat_byte(uf, offset + 1, &a);
+	if (err < 0)
+		return err;
+
+	if (index & 1) {
+		err = read_fat_byte(uf, offset + 2, &b);
+		if (err < 0)
+			return err;
+
+		raw = (((ufat_cluster_t)b) << 4) |
+			(((ufat_cluster_t)a) >> 4);
+	} else {
+		err = read_fat_byte(uf, offset, &b);
+		if (err < 0)
+			return err;
+
+		raw = ((ufat_cluster_t)b) |
+			((((ufat_cluster_t)a) & 0xf) << 8);
+	}
+
+	if (raw >= 0xff8 || raw == 0xff0) {
+		*out = UFAT_CLUSTER_EOC;
+		return 0;
+	}
+
+	if (raw == 0xff7) {
+		*out = UFAT_CLUSTER_BAD;
+		return 0;
+	}
+
+	*out = raw;
+	return 0;
 }
 
 static int read_fat16(struct ufat *uf, ufat_cluster_t index,
@@ -361,7 +411,7 @@ static int read_fat16(struct ufat *uf, ufat_cluster_t index,
 		return 0;
 	}
 
-	if (raw >= 0xfff0) {
+	if (raw == 0xfff7) {
 		*out = UFAT_CLUSTER_BAD;
 		return 0;
 	}
@@ -389,7 +439,7 @@ static int read_fat32(struct ufat *uf, ufat_cluster_t index,
 		return 0;
 	}
 
-	if (raw >= 0xffffff0) {
+	if (raw == 0xffffff7) {
 		*out = UFAT_CLUSTER_BAD;
 		return 0;
 	}
@@ -413,11 +463,46 @@ int ufat_read_fat(struct ufat *uf, ufat_cluster_t index,
 	return 0;
 }
 
+static int write_fat_byte(struct ufat *uf, unsigned int offset,
+			  uint8_t byte, uint8_t mask)
+{
+	ufat_block_t b = offset >> uf->dev->log2_block_size;
+	unsigned int r = offset & ((1 << uf->dev->log2_block_size) - 1);
+	int idx;
+	uint8_t *data;
+
+	idx = ufat_cache_open(uf, uf->bpb.fat_start + b);
+	if (idx < 0)
+		return idx;
+
+	data = ufat_cache_data(uf, idx);
+	ufat_cache_write(uf, idx);
+
+	data[r] = (data[r] & ~mask) | (byte & mask);
+	return 0;
+}
+
 static int write_fat12(struct ufat *uf, ufat_cluster_t index,
 		       ufat_cluster_t in)
 {
-	// FIXME
-	return 0;
+	unsigned int offset = (index >> 1) * 3;
+	int err;
+
+	if (index & 1) {
+		err = write_fat_byte(uf, offset + 1,
+				     (in & 0xf) << 4, 0xf0);
+		if (err < 0)
+			return err;
+
+		return write_fat_byte(uf, offset + 2,
+				      (in & 0xff0) >> 4, 0xff);
+	}
+
+	err = write_fat_byte(uf, offset, in & 0xff, 0xff);
+	if (err < 0)
+		return err;
+
+	return write_fat_byte(uf, offset + 1, (in & 0xf00) >> 8, 0x0f);
 }
 
 static int write_fat16(struct ufat *uf, ufat_cluster_t index,
@@ -499,6 +584,10 @@ static int alloc_cluster(struct ufat *uf, ufat_cluster_t *out,
 		ufat_cluster_t c;
 
 		uf->alloc_ptr = (uf->alloc_ptr + 1) % total;
+
+		/* Never use this cluster index in a FAT12 system */
+		if (idx == 0xff0 && uf->bpb.type == UFAT_TYPE_FAT12)
+			continue;
 
 		if (!ufat_read_fat(uf, idx, &c) && c == UFAT_CLUSTER_FREE) {
 			int err = ufat_write_fat(uf, idx, tail);
