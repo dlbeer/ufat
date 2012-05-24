@@ -150,4 +150,15 @@ uint8_t ufat_short_checksum(const char *short_name, const char *short_ext);
 int ufat_format_short(const char *name, const char *ext,
 		      char *out, int max_len);
 
+/* Long name comparison.
+ *
+ * Names are compared without regard to case. If component_only is set,
+ * then any '/' or '\\' character in search_name is treated as a
+ * terminator.
+ *
+ * Returns the length of the match, or -1 if the names don't match.
+ */
+int ufat_compare_name(const char *search_name, const char *dir_name,
+		      int component_only);
+
 #endif

@@ -393,7 +393,7 @@ int ufat_dir_find(struct ufat_directory *dir,
 		if (err)
 			return err;
 
-		if (!strcasecmp(name, target))
+		if (ufat_compare_name(target, name, 0) >= 0)
 			break;
 	}
 
@@ -412,11 +412,8 @@ int ufat_dir_find_path(struct ufat_directory *dir,
 	while (*path) {
 		int len = 0;
 
-		while (path[len] && path[len] != '/' && path[len] != '\\')
-			len++;
-
 		/* Ignore blank components */
-		if (!len) {
+		if (*path == '/' || *path == '\\') {
 			path++;
 			continue;
 		}
@@ -444,7 +441,8 @@ int ufat_dir_find_path(struct ufat_directory *dir,
 				return 1;
 			}
 
-			if (!strncasecmp(name, path, len) && !name[len])
+			len = ufat_compare_name(path, name, 1);
+			if (len >= 0)
 				break;
 		}
 

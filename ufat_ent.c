@@ -382,8 +382,8 @@ int ufat_short_exists(struct ufat_directory *dir, const char *short_name,
 		if (err)
 			break;
 
-		if (!strcasecmp(ent.short_name, short_name) &&
-		    !strcasecmp(ent.short_ext, short_ext))
+		if (ufat_compare_name(short_name, ent.short_name, 0) >= 0 &&
+		    ufat_compare_name(short_ext, ent.short_ext, 0) >= 0)
 			return 1;
 	}
 
@@ -594,4 +594,37 @@ int ufat_format_short(const char *name, const char *ext,
 
 	out[i] = 0;
 	return 0;
+}
+
+int ufat_compare_name(const char *search_name, const char *dir_name,
+		      int component_only)
+{
+	int m = 0;
+
+	while (search_name[m]) {
+		int dc = dir_name[m];
+		int sc = search_name[m];
+
+		if (component_only && (sc == '/' || sc == '\\'))
+			break;
+
+		if (!dc)
+			return -1;
+
+		if (sc >= 'a' && sc <= 'z')
+			sc -= 32;
+
+		if (dc >= 'a' && dc <= 'z')
+			dc -= 32;
+
+		if (sc != dc)
+			return -1;
+
+		m++;
+	}
+
+	if (dir_name[m])
+		return -1;
+
+	return m;
 }
