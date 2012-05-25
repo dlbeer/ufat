@@ -229,6 +229,9 @@ int ufat_dir_find_path(struct ufat_directory *dir,
 		       const char *path, struct ufat_dirent *inf,
 		       const char **path_out);
 
+/* Alter the dates, times and attributes a directory entry */
+int ufat_update_attributes(struct ufat *uf, struct ufat_dirent *ent);
+
 /* File IO */
 struct ufat_file {
 	struct ufat		*uf;

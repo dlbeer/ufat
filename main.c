@@ -20,6 +20,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <getopt.h>
 #include <string.h>
 #include <errno.h>
@@ -512,6 +513,219 @@ static int cmd_mkdir(struct ufat *uf, const struct options *opt)
 	return 0;
 }
 
+static int parse_dosattr(const char *attr, ufat_attr_t *a)
+{
+	ufat_attr_t out = 0;
+
+	while (*attr) {
+		switch (*attr) {
+		case 'A':
+		case 'a':
+			out |= UFAT_ATTR_ARCHIVE;
+			break;
+
+		case 'H':
+		case 'h':
+			out |= UFAT_ATTR_HIDDEN;
+			break;
+
+		case 'R':
+		case 'r':
+			out |= UFAT_ATTR_READONLY;
+			break;
+
+		case 'S':
+		case 's':
+			out |= UFAT_ATTR_SYSTEM;
+			break;
+
+		default:
+			fprintf(stderr, "Unrecognized DOS attribute: %c\n",
+				*attr);
+			return -1;
+		}
+
+		attr++;
+	}
+
+	*a = out;
+	return 0;
+}
+
+static int parse_date(const char *text, ufat_date_t *d)
+{
+	int bits[3] = {0};
+	int b = 0;
+	int i;
+
+	if (!strcasecmp(text, "now")) {
+		time_t now = time(NULL);
+		struct tm *local = localtime(&now);
+
+		*d = UFAT_DATE(local->tm_year + 1900,
+			       local->tm_mon + 1,
+			       local->tm_mday);
+		return 0;
+	}
+
+	for (i = 0; text[i]; i++) {
+		const int c = text[i];
+
+		if (c == '-') {
+			b++;
+			if (b >= 3)
+				goto bad_format;
+		} else if (isdigit(c)) {
+			bits[b] = bits[b] * 10 + c - '0';
+		} else {
+			goto bad_format;
+		}
+	}
+
+	if (b < 2)
+		goto bad_format;
+
+	*d = UFAT_DATE(bits[0], bits[1], bits[2]);
+	return 0;
+
+ bad_format:
+	fprintf(stderr, "Date must be of the form YYYY-MM-DD: %s\n", text);
+	return -1;
+}
+
+static int parse_time(const char *text, ufat_time_t *t)
+{
+	int bits[3] = {0};
+	int b = 0;
+	int i;
+
+	if (!strcasecmp(text, "now")) {
+		time_t now = time(NULL);
+		struct tm *local = localtime(&now);
+
+		*t = UFAT_TIME(local->tm_hour,
+			       local->tm_min,
+			       local->tm_sec);
+		return 0;
+	}
+
+	for (i = 0; text[i]; i++) {
+		const int c = text[i];
+
+		if (c == ':') {
+			b++;
+			if (b >= 3)
+				goto bad_format;
+		} else if (isdigit(c)) {
+			bits[b] = bits[b] * 10 + c - '0';
+		} else {
+			goto bad_format;
+		}
+	}
+
+	if (b < 2)
+		goto bad_format;
+
+	*t = UFAT_TIME(bits[0], bits[1], bits[2]);
+	return 0;
+
+ bad_format:
+	fprintf(stderr, "Time must be of the form HH:MM:SS: %s\n",
+		text);
+	return -1;
+}
+
+static int parse_attribute(const char *spec, struct ufat_dirent *ent)
+{
+	char key[64];
+	char *value;
+
+	if (*spec == '+' || *spec == '~' || *spec == '=') {
+		ufat_attr_t a;
+
+		if (parse_dosattr(spec + 1, &a) < 0)
+			return -1;
+
+		if (*spec == '+')
+			ent->attributes |= a;
+		else if (*spec == '=')
+			ent->attributes = a;
+		else
+			ent->attributes &= ~a;
+
+		return 0;
+	}
+
+	/* Try to identify a key=value pair */
+	strncpy(key, spec, sizeof(key));
+	key[sizeof(key) - 1] = 0;
+
+	value = strchr(key, '=');
+	if (!value) {
+		fprintf(stderr, "Unknown attribute specification: %s\n",
+			spec);
+		return -1;
+	}
+
+	*(value++) = 0;
+
+	/* Deal with it */
+	if (!strcasecmp(key, "create_date"))
+		return parse_date(value, &ent->create_date);
+	if (!strcasecmp(key, "create_time"))
+		return parse_time(value, &ent->create_time);
+	if (!strcasecmp(key, "modify_date"))
+		return parse_date(value, &ent->modify_date);
+	if (!strcasecmp(key, "modify_time"))
+		return parse_time(value, &ent->modify_time);
+	if (!strcasecmp(key, "access_date"))
+		return parse_date(value, &ent->access_date);
+
+	fprintf(stderr, "Unknown attribute: %s\n", key);
+	return -1;
+}
+
+static int cmd_chattr(struct ufat *uf, const struct options *opt)
+{
+	struct ufat_directory dir;
+	struct ufat_dirent ent;
+	int err;
+	int i;
+
+	if (!opt->argc) {
+		fprintf(stderr, "You must specify a file path\n");
+		return -1;
+	}
+
+	ufat_open_root(uf, &dir);
+	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, NULL);
+
+	if (err < 0) {
+		fprintf(stderr, "ufat_dir_find_path: %s\n",
+			ufat_strerror(err));
+		return -1;
+	}
+
+	if (err) {
+		fprintf(stderr, "No such file or directory: %s\n",
+			opt->argv[0]);
+		return -1;
+	}
+
+	for (i = 1; i < opt->argc; i++)
+		if (parse_attribute(opt->argv[i], &ent) < 0)
+			return -1;
+
+	err = ufat_update_attributes(uf, &ent);
+	if (err < 0) {
+		fprintf(stderr, "ufat_dir_update_attributes: %s\n",
+			ufat_strerror(err));
+		return -1;
+	}
+
+	return 0;
+}
+
 static void show_info(const struct ufat_bpb *bpb)
 {
 	printf("Type:                       FAT%d\n", bpb->type);
@@ -533,21 +747,33 @@ static void usage(const char *progname)
 "Usage: %s [options] <image file> [command [args]]\n"
 "\n"
 "Options may be any of the following:\n"
-"  -b block-size        Set the simulated block size\n"
-"  -S                   Show performance statistics\n"
-"  -R seed              Randomize file IO request sizes\n"
-"  --mkfs <num blocks>  Initialize the filesystem (WARNING: all existing data\n"
-"                       will be lost).\n"
-"  --help               Show this text\n"
-"  --version            Show version information\n"
+"  -b block-size           Set the simulated block size\n"
+"  -S                      Show performance statistics\n"
+"  -R seed                 Randomize file IO request sizes\n"
+"  --mkfs <num blocks>     Initialize the filesystem (WARNING: all existing\n"
+"                          data will be lost).\n"
+"  --help                  Show this text\n"
+"  --version               Show version information\n"
 "\n"
 "With no command, basic information is printed. Available commands are:\n"
-"  dir [directory]      Show a directory listing\n"
-"  fstat [path]         Show directory entry details\n"
-"  read [file]          Dump the contents of the given file\n"
-"  write [file]         Write to a file\n"
-"  rm [path]            Remove a directory or file\n"
-"  mkdir [directory]    Create a new empty directory\n",
+"  dir [directory]         Show a directory listing\n"
+"  fstat [path]            Show directory entry details\n"
+"  read [file]             Dump the contents of the given file\n"
+"  write [file]            Write to a file\n"
+"  rm [path]               Remove a directory or file\n"
+"  mkdir [directory]       Create a new empty directory\n"
+"  chattr [path] [attributes]\n"
+"                          Alter file attributes/dates/times (see below)\n"
+"\n"
+"Attributes are specified using arguments with a key=value syntax:\n"
+"  create_date=YYYY-MM-DD  Creation date\n"
+"  create_time=HH:MM:SS    Creation time\n"
+"  modify_date=YYYY-MM-DD  Modification date\n"
+"  modify_time=HH:MM:SS    Modification time\n"
+"  access_date=YYYY-MM-DD  Access date\n"
+"  [+/~/=]AHRS             Alter archive/hidden/read-only/system\n"
+"\n"
+"The special value \"now\" can be used for either dates or times.\n",
 progname);
 }
 
@@ -591,7 +817,8 @@ static const struct command command_table[] = {
 	{"read",	cmd_read},
 	{"write",	cmd_write},
 	{"rm",		cmd_rm},
-	{"mkdir",	cmd_mkdir}
+	{"mkdir",	cmd_mkdir},
+	{"chattr",	cmd_chattr}
 };
 
 static const struct command *find_command(const char *name)

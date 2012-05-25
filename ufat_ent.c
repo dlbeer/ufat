@@ -628,3 +628,31 @@ int ufat_compare_name(const char *search_name, const char *dir_name,
 
 	return m;
 }
+
+int ufat_update_attributes(struct ufat *uf, struct ufat_dirent *ent)
+{
+	int idx = ufat_cache_open(uf, ent->dirent_block);
+	uint8_t *data;
+	struct ufat_dirent old;
+
+	if (idx < 0)
+		return idx;
+
+	data = ufat_cache_data(uf, idx) + ent->dirent_pos * UFAT_DIRENT_SIZE;
+	ufat_parse_dirent(uf->bpb.type, data, &old);
+
+	if (!(old.attributes & UFAT_ATTR_DIRECTORY))
+		old.attributes = (old.attributes & ~UFAT_ATTR_USER) |
+			(ent->attributes & UFAT_ATTR_USER);
+
+	old.create_date = ent->create_date;
+	old.create_time = ent->create_time;
+	old.modify_date = ent->modify_date;
+	old.modify_time = ent->modify_time;
+	old.access_date = ent->access_date;
+
+	ufat_cache_write(uf, idx);
+	ufat_pack_dirent(&old, data);
+
+	return 0;
+}
