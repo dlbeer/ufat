@@ -229,6 +229,11 @@ int ufat_dir_find_path(struct ufat_directory *dir,
 		       const char *path, struct ufat_dirent *inf,
 		       const char **path_out);
 
+/* Read the canonical long filename for a dirent. */
+int ufat_get_filename(struct ufat *uf,
+		      const struct ufat_dirent *ent,
+		      char *name_buf, int max_len);
+
 /* Alter the dates, times and attributes a directory entry */
 int ufat_update_attributes(struct ufat *uf, struct ufat_dirent *ent);
 

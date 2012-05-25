@@ -228,6 +228,7 @@ static int cmd_fstat(struct ufat *uf, const struct options *opt)
 {
 	struct ufat_directory dir;
 	struct ufat_dirent ent;
+	char can_name[UFAT_LFN_MAX_UTF8];
 	int err;
 
 	if (!opt->argc) {
@@ -249,6 +250,13 @@ static int cmd_fstat(struct ufat *uf, const struct options *opt)
 			opt->argv[0]);
 		return -1;
 	}
+
+	err = ufat_get_filename(uf, &ent, can_name, sizeof(can_name));
+	if (err < 0)
+		fprintf(stderr, "ufat_get_filename: %s\n",
+			ufat_strerror(err));
+	else
+		printf("Filename:               %s\n", can_name);
 
 	printf("Entry block/offset:     %llu/%d\n",
 	       ent.dirent_block, ent.dirent_pos);

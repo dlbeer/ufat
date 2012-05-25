@@ -462,3 +462,40 @@ int ufat_dir_find_path(struct ufat_directory *dir,
 
 	return 0;
 }
+
+int ufat_get_filename(struct ufat *uf,
+		      const struct ufat_dirent *ent,
+		      char *name_buf, int max_len)
+{
+	struct ufat_lfn_parser lfn;
+
+	ufat_lfn_reset(&lfn);
+
+	if (ent->lfn_block != UFAT_BLOCK_NONE) {
+		struct ufat_directory dir;
+
+		dir.uf = uf;
+		dir.cur_block = ent->lfn_block;
+		dir.cur_pos = ent->lfn_pos;
+
+		while (!(dir.cur_block == ent->dirent_block &&
+			 dir.cur_pos == ent->dirent_pos) &&
+		       dir.cur_block != UFAT_BLOCK_NONE) {
+			uint8_t data[UFAT_DIRENT_SIZE];
+			int err;
+
+			err = ufat_read_raw_dirent(&dir, data);
+			if (err < 0)
+				return err;
+
+			err = ufat_advance_raw_dirent(&dir, 0);
+			if (err < 0)
+				return err;
+
+			ufat_lfn_parse(&lfn, data,
+				       dir.cur_block, dir.cur_pos);
+		}
+	}
+
+	return format_name(&lfn, ent, name_buf, max_len);
+}
