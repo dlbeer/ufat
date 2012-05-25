@@ -191,27 +191,49 @@ static int list_dir(struct ufat_directory *dir)
 	return 0;
 }
 
+static int find_path(struct ufat *uf,
+		     struct ufat_directory *dir, const char *path,
+		     struct ufat_dirent *inf, const char **path_out)
+{
+	int err;
+
+	ufat_open_root(uf, dir);
+	err = ufat_dir_find_path(dir, path, inf, path_out);
+
+	if (err < 0)
+		fprintf(stderr, "ufat_dir_find_path: %s\n",
+			ufat_strerror(err));
+
+	return err;
+}
+
+static int require_file(struct ufat *uf, const char *path,
+			struct ufat_dirent *ent)
+{
+	struct ufat_directory dir;
+	int err = find_path(uf, &dir, path, ent, NULL);
+
+	if (err < 0)
+		return err;
+
+	if (err) {
+		fprintf(stderr, "No such file or directory: %s\n", path);
+		return -1;
+	}
+
+	return 0;
+}
+
 static int cmd_dir(struct ufat *uf, const struct options *opt)
 {
 	struct ufat_directory dir;
 
-	ufat_open_root(uf, &dir);
-
 	if (opt->argc) {
 		struct ufat_dirent ent;
-		int err = ufat_dir_find_path(&dir, opt->argv[0], &ent, NULL);
+		int err;
 
-		if (err < 0) {
-			fprintf(stderr, "ufat_dir_find_path: %s\n",
-				ufat_strerror(err));
+		if (require_file(uf, opt->argv[0], &ent) < 0)
 			return -1;
-		}
-
-		if (err) {
-			fprintf(stderr, "No such file or directory: %s\n",
-				opt->argv[0]);
-			return -1;
-		}
 
 		err = ufat_open_subdir(uf, &dir, &ent);
 		if (err < 0) {
@@ -219,6 +241,8 @@ static int cmd_dir(struct ufat *uf, const struct options *opt)
 				ufat_strerror(err));
 			return -1;
 		}
+	} else {
+		ufat_open_root(uf, &dir);
 	}
 
 	return list_dir(&dir);
@@ -226,7 +250,6 @@ static int cmd_dir(struct ufat *uf, const struct options *opt)
 
 static int cmd_fstat(struct ufat *uf, const struct options *opt)
 {
-	struct ufat_directory dir;
 	struct ufat_dirent ent;
 	char can_name[UFAT_LFN_MAX_UTF8];
 	int err;
@@ -236,20 +259,8 @@ static int cmd_fstat(struct ufat *uf, const struct options *opt)
 		return -1;
 	}
 
-	ufat_open_root(uf, &dir);
-	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, NULL);
-
-	if (err < 0) {
-		fprintf(stderr, "ufat_dir_find_path: %s\n",
-			ufat_strerror(err));
+	if (require_file(uf, opt->argv[0], &ent) < 0)
 		return -1;
-	}
-
-	if (err) {
-		fprintf(stderr, "No such file or directory: %s\n",
-			opt->argv[0]);
-		return -1;
-	}
 
 	err = ufat_get_filename(uf, &ent, can_name, sizeof(can_name));
 	if (err < 0)
@@ -294,7 +305,6 @@ static int cmd_fstat(struct ufat *uf, const struct options *opt)
 
 static int cmd_read(struct ufat *uf, const struct options *opt)
 {
-	struct ufat_directory dir;
 	struct ufat_dirent ent;
 	struct ufat_file file;
 	int err;
@@ -304,20 +314,8 @@ static int cmd_read(struct ufat *uf, const struct options *opt)
 		return -1;
 	}
 
-	ufat_open_root(uf, &dir);
-	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, NULL);
-
-	if (err < 0) {
-		fprintf(stderr, "ufat_dir_find_path: %s\n",
-			ufat_strerror(err));
+	if (require_file(uf, opt->argv[0], &ent) < 0)
 		return -1;
-	}
-
-	if (err) {
-		fprintf(stderr, "No such file or directory: %s\n",
-			opt->argv[0]);
-		return -1;
-	}
 
 	err = ufat_open_file(uf, &file, &ent);
 	if (err < 0) {
@@ -365,14 +363,9 @@ static int cmd_write(struct ufat *uf, const struct options *opt)
 		return -1;
 	}
 
-	ufat_open_root(uf, &dir);
-	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, &basename);
-
-	if (err < 0) {
-		fprintf(stderr, "ufat_dir_find_path: %s\n",
-			ufat_strerror(err));
+	err = find_path(uf, &dir, opt->argv[0], &ent, &basename);
+	if (err < 0)
 		return -1;
-	}
 
 	if (err) {
 		time_t now = time(NULL);
@@ -440,7 +433,6 @@ static int cmd_write(struct ufat *uf, const struct options *opt)
 
 static int cmd_rm(struct ufat *uf, const struct options *opt)
 {
-	struct ufat_directory dir;
 	struct ufat_dirent ent;
 	int err;
 
@@ -449,20 +441,8 @@ static int cmd_rm(struct ufat *uf, const struct options *opt)
 		return -1;
 	}
 
-	ufat_open_root(uf, &dir);
-	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, NULL);
-
-	if (err < 0) {
-		fprintf(stderr, "ufat_dir_find_path: %s\n",
-			ufat_strerror(err));
+	if (require_file(uf, opt->argv[0], &ent) < 0)
 		return -1;
-	}
-
-	if (err) {
-		fprintf(stderr, "No such file or directory: %s\n",
-			opt->argv[0]);
-		return -1;
-	}
 
 	err = ufat_dir_delete(uf, &ent);
 	if (err < 0) {
@@ -487,14 +467,9 @@ static int cmd_mkdir(struct ufat *uf, const struct options *opt)
 		return -1;
 	}
 
-	ufat_open_root(uf, &dir);
-	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, &basename);
-
-	if (err < 0) {
-		fprintf(stderr, "ufat_dir_find_path: %s\n",
-			ufat_strerror(err));
+	err = find_path(uf, &dir, opt->argv[0], &ent, &basename);
+	if (err < 0)
 		return -1;
-	}
 
 	if (!err) {
 		fprintf(stderr, "Path already exists: %s\n",
@@ -710,18 +685,13 @@ static int cmd_rename(struct ufat *uf, const struct options *opt)
 	src_path = opt->argv[0];
 	dst_name = opt->argv[1];
 
-	ufat_open_root(uf, &dir);
-	err = ufat_dir_find_path(&dir, src_path, &ent, NULL);
-
-	if (err < 0) {
-		fprintf(stderr, "ufat_dir_find_path: %s\n",
-			ufat_strerror(err));
+	err = find_path(uf, &dir, src_path, &ent, NULL);
+	if (err < 0)
 		return -1;
-	}
 
 	if (err) {
 		fprintf(stderr, "No such file or directory: %s\n",
-			opt->argv[0]);
+			ufat_strerror(err));
 		return -1;
 	}
 
@@ -754,14 +724,9 @@ static int cmd_move(struct ufat *uf, const struct options *opt)
 	src_path = opt->argv[0];
 	dst_path = opt->argv[1];
 
-	ufat_open_root(uf, &dir);
-	err = ufat_dir_find_path(&dir, src_path, &src_ent, NULL);
-
-	if (err < 0) {
-		fprintf(stderr, "ufat_dir_find_path: %s\n",
-			ufat_strerror(err));
+	err = find_path(uf, &dir, src_path, &src_ent, NULL);
+	if (err < 0)
 		return -1;
-	}
 
 	if (err) {
 		fprintf(stderr, "No such file or directory: %s\n",
@@ -816,7 +781,6 @@ static int cmd_move(struct ufat *uf, const struct options *opt)
 
 static int cmd_chattr(struct ufat *uf, const struct options *opt)
 {
-	struct ufat_directory dir;
 	struct ufat_dirent ent;
 	int err;
 	int i;
@@ -826,20 +790,8 @@ static int cmd_chattr(struct ufat *uf, const struct options *opt)
 		return -1;
 	}
 
-	ufat_open_root(uf, &dir);
-	err = ufat_dir_find_path(&dir, opt->argv[0], &ent, NULL);
-
-	if (err < 0) {
-		fprintf(stderr, "ufat_dir_find_path: %s\n",
-			ufat_strerror(err));
+	if (require_file(uf, opt->argv[0], &ent) < 0)
 		return -1;
-	}
-
-	if (err) {
-		fprintf(stderr, "No such file or directory: %s\n",
-			opt->argv[0]);
-		return -1;
-	}
 
 	for (i = 1; i < opt->argc; i++)
 		if (parse_attribute(opt->argv[i], &ent) < 0)
