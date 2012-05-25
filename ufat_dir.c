@@ -499,3 +499,32 @@ int ufat_get_filename(struct ufat *uf,
 
 	return format_name(&lfn, ent, name_buf, max_len);
 }
+
+int ufat_move(struct ufat_dirent *ent, struct ufat_directory *dst,
+	      const char *new_name)
+{
+	struct ufat_dirent new_ent;
+	int err;
+
+	if (!ufat_lfn_is_legal(new_name))
+		return -UFAT_ERR_ILLEGAL_NAME;
+
+	if (!ufat_dir_find(dst, new_name, &new_ent))
+		return -UFAT_ERR_FILE_EXISTS;
+
+	if (ent->short_name[0] == '.' || ent->dirent_block == UFAT_BLOCK_NONE)
+		return -UFAT_ERR_IMMUTABLE;
+
+	memcpy(&new_ent, ent, sizeof(new_ent));
+	err = insert_dirent(dst, &new_ent, new_name);
+	if (err < 0)
+		return err;
+
+	err = delete_entry(dst->uf, ent);
+	if (err < 0) {
+		delete_entry(dst->uf, &new_ent);
+		return err;
+	}
+
+	return 0;
+}

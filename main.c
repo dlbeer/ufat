@@ -693,6 +693,127 @@ static int parse_attribute(const char *spec, struct ufat_dirent *ent)
 	return -1;
 }
 
+static int cmd_rename(struct ufat *uf, const struct options *opt)
+{
+	struct ufat_directory dir;
+	struct ufat_dirent ent;
+	int err;
+	const char *src_path;
+	const char *dst_name;
+
+	if (opt->argc < 2) {
+		fprintf(stderr, "You must specified a source path and "
+			"a new name.\n");
+		return -1;
+	}
+
+	src_path = opt->argv[0];
+	dst_name = opt->argv[1];
+
+	ufat_open_root(uf, &dir);
+	err = ufat_dir_find_path(&dir, src_path, &ent, NULL);
+
+	if (err < 0) {
+		fprintf(stderr, "ufat_dir_find_path: %s\n",
+			ufat_strerror(err));
+		return -1;
+	}
+
+	if (err) {
+		fprintf(stderr, "No such file or directory: %s\n",
+			opt->argv[0]);
+		return -1;
+	}
+
+	err = ufat_move(&ent, &dir, dst_name);
+	if (err < 0) {
+		fprintf(stderr, "ufat_move: %s\n", ufat_strerror(err));
+		return -1;
+	}
+
+	return 0;
+}
+
+static int cmd_move(struct ufat *uf, const struct options *opt)
+{
+	struct ufat_directory dir;
+	struct ufat_dirent src_ent;
+	struct ufat_dirent dst_ent;
+	int err;
+	const char *src_path;
+	const char *dst_path;
+	const char *new_name;
+	char old_name[UFAT_LFN_MAX_UTF8];
+
+	if (opt->argc < 2) {
+		fprintf(stderr, "You must specified a source path and "
+			"a destination path.\n");
+		return -1;
+	}
+
+	src_path = opt->argv[0];
+	dst_path = opt->argv[1];
+
+	ufat_open_root(uf, &dir);
+	err = ufat_dir_find_path(&dir, src_path, &src_ent, NULL);
+
+	if (err < 0) {
+		fprintf(stderr, "ufat_dir_find_path: %s\n",
+			ufat_strerror(err));
+		return -1;
+	}
+
+	if (err) {
+		fprintf(stderr, "No such file or directory: %s\n",
+			opt->argv[0]);
+		return -1;
+	}
+
+	ufat_open_root(uf, &dir);
+	err = ufat_dir_find_path(&dir, dst_path, &dst_ent, &new_name);
+
+	if (err < 0) {
+		fprintf(stderr, "ufat_dir_find_path: %s\n",
+			ufat_strerror(err));
+		return -1;
+	}
+
+	if (!err) {
+		/* Is the destination a directory or an existing file? */
+		if (!(dst_ent.attributes & UFAT_ATTR_DIRECTORY)) {
+			fprintf(stderr, "File already exists: %s\n",
+				dst_path);
+			return -1;
+		}
+
+		/* It's a directory name. Use the old canonical filename. */
+		err = ufat_open_subdir(uf, &dir, &dst_ent);
+		if (err < 0) {
+			fprintf(stderr, "ufat_open_subdir: %s\n",
+				ufat_strerror(err));
+			return -1;
+		}
+
+		err = ufat_get_filename(uf, &src_ent,
+					old_name, sizeof(old_name));
+		if (err < 0) {
+			fprintf(stderr, "ufat_get_filename: %s\n",
+				ufat_strerror(err));
+			return -1;
+		}
+
+		new_name = old_name;
+	}
+
+	err = ufat_move(&src_ent, &dir, new_name);
+	if (err < 0) {
+		fprintf(stderr, "ufat_move: %s\n", ufat_strerror(err));
+		return -1;
+	}
+
+	return 0;
+}
+
 static int cmd_chattr(struct ufat *uf, const struct options *opt)
 {
 	struct ufat_directory dir;
@@ -772,6 +893,8 @@ static void usage(const char *progname)
 "  mkdir [directory]       Create a new empty directory\n"
 "  chattr [path] [attributes]\n"
 "                          Alter file attributes/dates/times (see below)\n"
+"  move [src] [dst]        Move a file from one place to another\n"
+"  rename [src] [new-name] Rename a file without moving it\n"
 "\n"
 "Attributes are specified using arguments with a key=value syntax:\n"
 "  create_date=YYYY-MM-DD  Creation date\n"
@@ -826,7 +949,9 @@ static const struct command command_table[] = {
 	{"write",	cmd_write},
 	{"rm",		cmd_rm},
 	{"mkdir",	cmd_mkdir},
-	{"chattr",	cmd_chattr}
+	{"chattr",	cmd_chattr},
+	{"move",	cmd_move},
+	{"rename",	cmd_rename}
 };
 
 static const struct command *find_command(const char *name)

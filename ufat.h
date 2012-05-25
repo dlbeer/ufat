@@ -237,6 +237,12 @@ int ufat_get_filename(struct ufat *uf,
 /* Alter the dates, times and attributes a directory entry */
 int ufat_update_attributes(struct ufat *uf, struct ufat_dirent *ent);
 
+/* Remove a file from its containing directory and reinsert it in (possibly
+ * the same) directory. The dirent structure will be modified.
+ */
+int ufat_move(struct ufat_dirent *ent, struct ufat_directory *dst,
+	      const char *new_name);
+
 /* File IO */
 struct ufat_file {
 	struct ufat		*uf;
