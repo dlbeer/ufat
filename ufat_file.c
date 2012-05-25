@@ -415,12 +415,14 @@ int ufat_file_truncate(struct ufat_file *f)
 		return err;
 
 	if (!f->file_size) {
+		ufat_cluster_t old_start = f->start;
+
 		err = set_start(f, 0);
 		if (err < 0)
 			return err;
 
-		if (UFAT_CLUSTER_IS_PTR(f->start)) {
-			err = ufat_free_chain(f->uf, f->start);
+		if (UFAT_CLUSTER_IS_PTR(old_start)) {
+			err = ufat_free_chain(f->uf, old_start);
 			if (err < 0)
 				return err;
 		}
