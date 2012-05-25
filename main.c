@@ -40,6 +40,9 @@ struct options {
 	unsigned int		seed;
 	ufat_block_t		num_blocks;
 
+	const char		*in_file;
+	const char		*out_file;
+
 	const char		*filename;
 	const struct command	*command;
 	char			**argv;
@@ -137,29 +140,80 @@ static void file_device_close(struct file_device *dev)
 	fclose(dev->f);
 }
 
-static void print_date(ufat_date_t d)
+static FILE *open_input(const char *fname)
 {
-	printf("%04d-%02d-%02d",
-	       UFAT_DATE_Y(d), UFAT_DATE_M(d), UFAT_DATE_D(d));
+	FILE *in;
+
+	if (!fname)
+		return stdin;
+
+	in = fopen(fname, "rb");
+	if (!in) {
+		fprintf(stderr, "Failed to open %s for reading: %s\n",
+			fname, strerror(errno));
+		return NULL;
+	}
+
+	return in;
 }
 
-static void print_time(ufat_time_t t)
+static void close_input(const char *fname, FILE *f)
 {
-	printf("%2d:%02d:%02d",
-	       UFAT_TIME_H(t), UFAT_TIME_M(t), UFAT_TIME_S(t));
+	if (fname)
+		fclose(f);
 }
 
-static void print_attributes(ufat_attr_t a)
+static FILE *open_output(const char *fname)
 {
-	printf("%c%c%c%c%c",
-	       (a & UFAT_ATTR_ARCHIVE) ? 'A' : ' ',
-	       (a & UFAT_ATTR_SYSTEM) ? 'S' : ' ',
-	       (a & UFAT_ATTR_HIDDEN) ? 'H' : ' ',
-	       (a & UFAT_ATTR_READONLY) ? 'R' : ' ',
-	       (a & UFAT_ATTR_DIRECTORY) ? 'D' : ' ');
+	FILE *out;
+
+	if (!fname)
+		return stdout;
+
+	out = fopen(fname, "wb");
+	if (!out) {
+		fprintf(stderr, "Failed to open %s for writing: %s\n",
+			fname, strerror(errno));
+		return NULL;
+	}
+
+	return out;
 }
 
-static int list_dir(struct ufat_directory *dir)
+static int close_output(const char *fname, FILE *f)
+{
+	if (fname && fclose(f) < 0) {
+		fprintf(stderr, "Error on closing %s: %s\n",
+			fname, strerror(errno));
+		return -1;
+	}
+
+	return 0;
+}
+
+static void print_date(FILE *out, ufat_date_t d)
+{
+	fprintf(out, "%04d-%02d-%02d",
+		UFAT_DATE_Y(d), UFAT_DATE_M(d), UFAT_DATE_D(d));
+}
+
+static void print_time(FILE *out, ufat_time_t t)
+{
+	fprintf(out, "%2d:%02d:%02d",
+		UFAT_TIME_H(t), UFAT_TIME_M(t), UFAT_TIME_S(t));
+}
+
+static void print_attributes(FILE *out, ufat_attr_t a)
+{
+	fprintf(out, "%c%c%c%c%c",
+		(a & UFAT_ATTR_ARCHIVE) ? 'A' : ' ',
+		(a & UFAT_ATTR_SYSTEM) ? 'S' : ' ',
+		(a & UFAT_ATTR_HIDDEN) ? 'H' : ' ',
+		(a & UFAT_ATTR_READONLY) ? 'R' : ' ',
+		(a & UFAT_ATTR_DIRECTORY) ? 'D' : ' ');
+}
+
+static int list_dir(FILE *out, struct ufat_directory *dir)
 {
 	for (;;) {
 		struct ufat_dirent inf;
@@ -176,16 +230,16 @@ static int list_dir(struct ufat_directory *dir)
 		if (err)
 			break;
 
-		print_date(inf.modify_date);
-		printf(" ");
-		print_time(inf.modify_time);
-		printf(" ");
-		print_attributes(inf.attributes & ~UFAT_ATTR_DIRECTORY);
+		print_date(out, inf.modify_date);
+		fprintf(out, " ");
+		print_time(out, inf.modify_time);
+		fprintf(out, " ");
+		print_attributes(out, inf.attributes & ~UFAT_ATTR_DIRECTORY);
 		if (inf.attributes & UFAT_ATTR_DIRECTORY)
-			printf(" %9s", "<DIR>");
+			fprintf(out, " %9s", "<DIR>");
 		else
-			printf(" %9u", inf.file_size);
-		printf(" %s\n", lfn);
+			fprintf(out, " %9u", inf.file_size);
+		fprintf(out, " %s\n", lfn);
 	}
 
 	return 0;
@@ -227,6 +281,7 @@ static int require_file(struct ufat *uf, const char *path,
 static int cmd_dir(struct ufat *uf, const struct options *opt)
 {
 	struct ufat_directory dir;
+	FILE *out;
 
 	if (opt->argc) {
 		struct ufat_dirent ent;
@@ -245,11 +300,21 @@ static int cmd_dir(struct ufat *uf, const struct options *opt)
 		ufat_open_root(uf, &dir);
 	}
 
-	return list_dir(&dir);
+	out = open_output(opt->out_file);
+	if (!out)
+		return -1;
+
+	if (list_dir(out, &dir) < 0) {
+		close_output(opt->out_file, out);
+		return -1;
+	}
+
+	return close_output(opt->out_file, out);
 }
 
 static int cmd_fstat(struct ufat *uf, const struct options *opt)
 {
+	FILE *out;
 	struct ufat_dirent ent;
 	char can_name[UFAT_LFN_MAX_UTF8];
 	int err;
@@ -262,49 +327,54 @@ static int cmd_fstat(struct ufat *uf, const struct options *opt)
 	if (require_file(uf, opt->argv[0], &ent) < 0)
 		return -1;
 
+	out = open_output(opt->out_file);
+	if (!out)
+		return -1;
+
 	err = ufat_get_filename(uf, &ent, can_name, sizeof(can_name));
 	if (err < 0)
 		fprintf(stderr, "ufat_get_filename: %s\n",
 			ufat_strerror(err));
 	else
-		printf("Filename:               %s\n", can_name);
+		fprintf(out, "Filename:               %s\n", can_name);
 
-	printf("Entry block/offset:     %llu/%d\n",
-	       ent.dirent_block, ent.dirent_pos);
+	fprintf(out, "Entry block/offset:     %llu/%d\n",
+		ent.dirent_block, ent.dirent_pos);
 
 	if (ent.lfn_block != UFAT_BLOCK_NONE)
-		printf("LFN start block/offset: %llu/%d\n",
-		       ent.lfn_block, ent.lfn_pos);
+		fprintf(out, "LFN start block/offset: %llu/%d\n",
+			ent.lfn_block, ent.lfn_pos);
 
-	printf("Short name:             %s", ent.short_name);
+	fprintf(out, "Short name:             %s", ent.short_name);
 	if (ent.short_ext[0])
-		printf(".%s\n", ent.short_ext);
+		fprintf(out, ".%s\n", ent.short_ext);
 	else
-		printf("\n");
-	printf("Attributes:             0x%02x (", ent.attributes);
-	print_attributes(ent.attributes);
-	printf(")\n");
-	printf("Creation date/time:     ");
-	print_date(ent.create_date);
-	printf(" ");
-	print_time(ent.create_time);
-	printf("\n");
-	printf("Modification date/time: ");
-	print_date(ent.modify_date);
-	printf(" ");
-	print_time(ent.modify_time);
-	printf("\n");
-	printf("Last access date:       ");
-	print_date(ent.access_date);
-	printf("\n");
-	printf("First cluster:          %u\n", ent.first_cluster);
-	printf("Size:                   %u\n", ent.file_size);
+		fprintf(out, "\n");
+	fprintf(out, "Attributes:             0x%02x (", ent.attributes);
+	print_attributes(out, ent.attributes);
+	fprintf(out, ")\n");
+	fprintf(out, "Creation date/time:     ");
+	print_date(out, ent.create_date);
+	fprintf(out, " ");
+	print_time(out, ent.create_time);
+	fprintf(out, "\n");
+	fprintf(out, "Modification date/time: ");
+	print_date(out, ent.modify_date);
+	fprintf(out, " ");
+	print_time(out, ent.modify_time);
+	fprintf(out, "\n");
+	fprintf(out, "Last access date:       ");
+	print_date(out, ent.access_date);
+	fprintf(out, "\n");
+	fprintf(out, "First cluster:          %u\n", ent.first_cluster);
+	fprintf(out, "Size:                   %u\n", ent.file_size);
 
-	return 0;
+	return close_output(opt->out_file, out);
 }
 
 static int cmd_read(struct ufat *uf, const struct options *opt)
 {
+	FILE *out;
 	struct ufat_dirent ent;
 	struct ufat_file file;
 	int err;
@@ -323,6 +393,10 @@ static int cmd_read(struct ufat *uf, const struct options *opt)
 		return -1;
 	}
 
+	out = open_output(opt->out_file);
+	if (!out)
+		return -1;
+
 	for (;;) {
 		char buf[16384];
 		int req_size = sizeof(buf);
@@ -335,23 +409,26 @@ static int cmd_read(struct ufat *uf, const struct options *opt)
 		if (len < 0) {
 			fprintf(stderr, "ufat_file_read: %s\n",
 				ufat_strerror(len));
+			close_output(opt->out_file, out);
 			return -1;
 		}
 
 		if (!len)
 			break;
 
-		if (fwrite(buf, 1, len, stdout) != len) {
+		if (fwrite(buf, 1, len, out) != len) {
 			perror("fwrite");
+			close_output(opt->out_file, out);
 			return -1;
 		}
 	}
 
-	return 0;
+	return close_output(opt->out_file, out);
 }
 
 static int cmd_write(struct ufat *uf, const struct options *opt)
 {
+	FILE *in;
 	const char *basename;
 	struct ufat_directory dir;
 	struct ufat_dirent ent;
@@ -365,6 +442,10 @@ static int cmd_write(struct ufat *uf, const struct options *opt)
 
 	err = find_path(uf, &dir, opt->argv[0], &ent, &basename);
 	if (err < 0)
+		return -1;
+
+	in = open_input(opt->in_file);
+	if (!in)
 		return -1;
 
 	if (err) {
@@ -386,6 +467,7 @@ static int cmd_write(struct ufat *uf, const struct options *opt)
 		if (err < 0) {
 			fprintf(stderr, "Failed to create file: %s: %s\n",
 				basename, ufat_strerror(err));
+			close_input(opt->in_file, in);
 			return -1;
 		}
 	}
@@ -393,6 +475,7 @@ static int cmd_write(struct ufat *uf, const struct options *opt)
 	err = ufat_open_file(uf, &file, &ent);
 	if (err < 0) {
 		fprintf(stderr, "ufat_open_file: %s\n", ufat_strerror(err));
+		close_input(opt->in_file, in);
 		return -1;
 	}
 
@@ -404,9 +487,10 @@ static int cmd_write(struct ufat *uf, const struct options *opt)
 		if (opt->flags & OPTION_RANDOMIZE)
 			req_size = random() % sizeof(buf) + 1;
 
-		len = fread(buf, 1, req_size, stdin);
+		len = fread(buf, 1, req_size, in);
 		if (ferror(stdin)) {
 			perror("fread");
+			close_input(opt->in_file, in);
 			return -1;
 		}
 
@@ -417,6 +501,7 @@ static int cmd_write(struct ufat *uf, const struct options *opt)
 		if (len < 0) {
 			fprintf(stderr, "ufat_file_write: %s\n",
 				ufat_strerror(len));
+			close_input(opt->in_file, in);
 			return -1;
 		}
 	}
@@ -425,9 +510,11 @@ static int cmd_write(struct ufat *uf, const struct options *opt)
 	if (err < 0) {
 		fprintf(stderr, "ufat_file_truncate: %s\n",
 			ufat_strerror(err));
+		close_input(opt->in_file, in);
 		return -1;
 	}
 
+	close_input(opt->in_file, in);
 	return 0;
 }
 
@@ -807,19 +894,19 @@ static int cmd_chattr(struct ufat *uf, const struct options *opt)
 	return 0;
 }
 
-static void show_info(const struct ufat_bpb *bpb)
+static void show_info(FILE *out, const struct ufat_bpb *bpb)
 {
-	printf("Type:                       FAT%d\n", bpb->type);
-	printf("Blocks per cluster:         %u\n",
-	       1 << bpb->log2_blocks_per_cluster);
-	printf("FAT size (blocks):          %llu\n", bpb->fat_size);
-	printf("FAT offset (block):         %llu\n", bpb->fat_start);
-	printf("FAT count:                  %u\n", bpb->fat_count);
-	printf("Cluster starting block:     %llu\n", bpb->cluster_start);
-	printf("Clusters:                   %u\n", bpb->num_clusters);
-	printf("Root directory block start: %llu\n", bpb->root_start);
-	printf("Root directory block count: %llu\n", bpb->root_size);
-	printf("Root directory cluster:     %u\n", bpb->root_cluster);
+	fprintf(out, "Type:                       FAT%d\n", bpb->type);
+	fprintf(out, "Blocks per cluster:         %u\n",
+		1 << bpb->log2_blocks_per_cluster);
+	fprintf(out, "FAT size (blocks):          %llu\n", bpb->fat_size);
+	fprintf(out, "FAT offset (block):         %llu\n", bpb->fat_start);
+	fprintf(out, "FAT count:                  %u\n", bpb->fat_count);
+	fprintf(out, "Cluster starting block:     %llu\n", bpb->cluster_start);
+	fprintf(out, "Clusters:                   %u\n", bpb->num_clusters);
+	fprintf(out, "Root directory block start: %llu\n", bpb->root_start);
+	fprintf(out, "Root directory block count: %llu\n", bpb->root_size);
+	fprintf(out, "Root directory cluster:     %u\n", bpb->root_cluster);
 }
 
 static void usage(const char *progname)
@@ -831,8 +918,10 @@ static void usage(const char *progname)
 "  -b block-size           Set the simulated block size\n"
 "  -S                      Show performance statistics\n"
 "  -R seed                 Randomize file IO request sizes\n"
+"  -i filename             Read input from the given file\n"
+"  -o filename             Write output to the given file\n"
 "  --mkfs <num blocks>     Initialize the filesystem (WARNING: all existing\n"
-"                          data will be lost).\n"
+"                          data will be lost)\n"
 "  --help                  Show this text\n"
 "  --version               Show version information\n"
 "\n"
@@ -934,8 +1023,16 @@ static int parse_options(int argc, char **argv, struct options *opt)
 	memset(opt, 0, sizeof(*opt));
 	opt->log2_bs = 9;
 
-	while ((o = getopt_long(argc, argv, "b:SR:", longopts, NULL)) >= 0)
+	while ((o = getopt_long(argc, argv, "b:SR:i:o:", longopts, NULL)) >= 0)
 		switch (o) {
+		case 'i':
+			opt->in_file = optarg;
+			break;
+
+		case 'o':
+			opt->out_file = optarg;
+			break;
+
 		case 'M':
 			opt->flags |= OPTION_MKFS;
 			opt->num_blocks = atoll(optarg);
@@ -1051,8 +1148,14 @@ int main(int argc, char **argv)
 	}
 
 	if (!opt.command) {
-		show_info(&uf.bpb);
-		err = 0;
+		FILE *out = open_output(opt.out_file);
+
+		if (!out) {
+			err = -1;
+		} else {
+			show_info(out, &uf.bpb);
+			err = close_output(opt.out_file, out);
+		}
 	} else {
 		err = opt.command->func(&uf, &opt);
 	}
