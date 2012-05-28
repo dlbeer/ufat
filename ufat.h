@@ -47,8 +47,8 @@ struct ufat_device {
 /* Cache parameters. The more cache is used, the fewer filesystem reads/writes
  * have to be performed. The cache must be able to hold at least one block.
  */
-#define UFAT_CACHE_MAX_BLOCKS		8
-#define UFAT_CACHE_BYTES		65536
+#define UFAT_CACHE_MAX_BLOCKS		16
+#define UFAT_CACHE_BYTES		8192
 
 #define UFAT_CACHE_FLAG_DIRTY		0x01
 #define UFAT_CACHE_FLAG_PRESENT		0x02

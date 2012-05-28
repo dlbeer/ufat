@@ -952,7 +952,7 @@ progname);
 static void version_banner(void)
 {
 	printf(
-"ufat version 20120507\n"
+"ufat version 20120528\n"
 "Copyright (C) 2012 TracMap Holdings Ltd\n"
 "This is free software; see the source for copying conditions. There is NO\n"
 "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n"
