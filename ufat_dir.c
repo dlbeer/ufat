@@ -41,7 +41,7 @@ int ufat_open_subdir(struct ufat *uf, struct ufat_directory *dir,
 	if (!(ent->attributes & UFAT_ATTR_DIRECTORY))
 		return -UFAT_ERR_NOT_DIRECTORY;
 
-	if (!ent->first_cluster) {
+	if (ent->dirent_block == UFAT_BLOCK_NONE) {
 		ufat_open_root(uf, dir);
 		return 0;
 	}
@@ -195,7 +195,7 @@ int ufat_dir_delete(struct ufat *uf, struct ufat_dirent *ent)
 {
 	int err;
 
-	if (!ent->first_cluster || ent->short_name[0] == '.')
+	if (ent->dirent_block == UFAT_BLOCK_NONE || ent->short_name[0] == '.')
 		return -UFAT_ERR_IMMUTABLE;
 
 	if (ent->attributes & UFAT_ATTR_DIRECTORY) {
