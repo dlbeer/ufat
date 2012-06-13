@@ -41,7 +41,7 @@ int ufat_open_subdir(struct ufat *uf, struct ufat_directory *dir,
 	if (!(ent->attributes & UFAT_ATTR_DIRECTORY))
 		return -UFAT_ERR_NOT_DIRECTORY;
 
-	if (ent->dirent_block == UFAT_BLOCK_NONE) {
+	if (ent->dirent_block == UFAT_BLOCK_NONE || !ent->first_cluster) {
 		ufat_open_root(uf, dir);
 		return 0;
 	}
