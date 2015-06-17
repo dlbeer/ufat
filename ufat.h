@@ -223,6 +223,9 @@ int ufat_dir_create(struct ufat_directory *dir, struct ufat_dirent *ent,
 int ufat_dir_mkfile(struct ufat_directory *dir, struct ufat_dirent *ent,
 		    const char *name);
 
+/* Search for a file by name. These functions return 0 on success, 1 if
+ * the file doesn't exist, or -1 if an error occurs.
+ */
 int ufat_dir_find(struct ufat_directory *dir,
 		  const char *name, struct ufat_dirent *inf);
 int ufat_dir_find_path(struct ufat_directory *dir,
