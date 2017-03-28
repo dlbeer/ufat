@@ -296,7 +296,7 @@ int ufat_sync(struct ufat *uf)
 			ret = err;
 	}
 
-	return 0;
+	return ret;
 }
 
 void ufat_close(struct ufat *uf)
