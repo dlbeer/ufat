@@ -36,6 +36,11 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif	/* def __cplusplus */
+
 /* Block counts and indices are held in this type. */
 typedef unsigned long long ufat_block_t;
 
@@ -285,5 +290,9 @@ int ufat_file_truncate(struct ufat_file *f);
 
 /* Filesystem creation */
 int ufat_mkfs(struct ufat_device *dev, ufat_block_t nblk);
+
+#ifdef __cplusplus
+}	/* extern "C" */
+#endif	/* def __cplusplus */
 
 #endif
