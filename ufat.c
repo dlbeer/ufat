@@ -75,7 +75,7 @@ static int cache_flush(struct ufat *uf, unsigned int cache_index)
 
 int ufat_cache_evict(struct ufat *uf, ufat_block_t start, ufat_block_t count)
 {
-	int i;
+	unsigned int i;
 
 	for (i = 0; i < uf->cache_size; i++) {
 		struct ufat_cache_desc *d = &uf->cache_desc[i];

@@ -166,7 +166,7 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 	const unsigned int block_size = 1 << dev->log2_block_size;
 	const ufat_block_t backup = fl->reserved_blocks >> 1;
 	uint8_t buf[block_size];
-	int i;
+	ufat_block_t i;
 
 	switch (fl->type) {
 	case UFAT_TYPE_FAT12:

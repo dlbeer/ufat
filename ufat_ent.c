@@ -155,7 +155,7 @@ int ufat_allocate_raw_dirent(struct ufat_directory *dir, unsigned int count)
 {
 	ufat_block_t empty_start = UFAT_BLOCK_NONE;
 	int empty_pos = 0;
-	int empty_count = 0;
+	unsigned int empty_count = 0;
 
 	ufat_dir_rewind(dir);
 
