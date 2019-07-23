@@ -115,7 +115,7 @@ int ufat_advance_raw_dirent(struct ufat_directory *dir, int can_alloc)
 	/* Advance the dirent pointer and check for a block overrun */
 	dir->cur_pos++;
 	if (dir->cur_pos * UFAT_DIRENT_SIZE >=
-	    (1 << dir->uf->dev->log2_block_size)) {
+	    (1u << dir->uf->dev->log2_block_size)) {
 		dir->cur_pos = 0;
 
 		if (dir->cur_block < dir->uf->bpb.cluster_start) {
@@ -154,7 +154,7 @@ int ufat_read_raw_dirent(struct ufat_directory *dir, uint8_t *data)
 int ufat_allocate_raw_dirent(struct ufat_directory *dir, unsigned int count)
 {
 	ufat_block_t empty_start = UFAT_BLOCK_NONE;
-	int empty_pos = 0;
+	unsigned int empty_pos = 0;
 	unsigned int empty_count = 0;
 
 	ufat_dir_rewind(dir);

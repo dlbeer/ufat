@@ -214,7 +214,7 @@ struct ufat_dirent {
 
 struct ufat_directory {
 	struct ufat		*uf;
-	int			cur_pos;
+	unsigned int		cur_pos;
 	ufat_block_t		cur_block;
 	ufat_block_t		start;
 };
