@@ -155,7 +155,7 @@ static int calculate_layout(struct fs_layout *fl,
 
 static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 {
-	const static uint8_t boot_header[11] = {
+	static const uint8_t boot_header[11] = {
 		0xeb, 0xfe, /* jmp $ */
 		0x90,       /* nop */
 		'u', 'f', 'a', 't', ' ', ' ', ' ', ' '
