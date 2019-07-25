@@ -429,7 +429,7 @@ static int cmd_read(struct ufat *uf, const struct options *opt)
 		if (!len)
 			break;
 
-		if (fwrite(buf, 1, len, out) != len) {
+		if (fwrite(buf, 1, len, out) != (size_t)len) {
 			perror("fwrite");
 			close_output(opt->out_file, out);
 			return -1;
@@ -1010,7 +1010,7 @@ static const struct command command_table[] = {
 
 static const struct command *find_command(const char *name)
 {
-	int i;
+	size_t i;
 
 	for (i = 0; i < sizeof(command_table) /
 		     sizeof(command_table[0]); i++) {

@@ -172,7 +172,7 @@ static int verify_empty_dir(struct ufat *uf, struct ufat_dirent *ent)
 
 static int delete_entry(struct ufat *uf, struct ufat_dirent *ent)
 {
-	const static uint8_t del_marker = 0xe5;
+	static const uint8_t del_marker = 0xe5;
 	struct ufat_directory dir;
 
 	dir.uf = uf;
