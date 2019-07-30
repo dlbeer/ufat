@@ -218,9 +218,6 @@ int ufat_file_read(struct ufat_file *f, void *buf, ufat_size_t size)
 	if (len < 0)
 		return len;
 
-	buf = (char*)buf + len;
-	size -= len;
-
 	return total;
 }
 
