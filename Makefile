@@ -31,7 +31,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 CC ?= gcc
-UFAT_CFLAGS = -O1 -Wall -Wextra -Wshadow -ggdb
+UFAT_CFLAGS = -O1 -Wall -Wextra -Wshadow -Wpedantic -ggdb
 
 all: ufat
 
