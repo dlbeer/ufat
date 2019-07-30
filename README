@@ -35,9 +35,8 @@ though a structure containing some key parameters and access functions:
 	    unsigned int	log2_block_size;
 	    int			(*read)(const struct ufat_device *dev, ufat_block_t start,
           ufat_block_t count, void *buffer);
-	    int			(*write)(const struct ufat_device *dev,
-					 ufat_block_t start, ufat_block_t count,
-					 const unsigned char *buffer);
+	    int			(*write)(const struct ufat_device *dev, ufat_block_t start,
+          ufat_block_t count, const void *buffer);
     };
 
 A pointer to the ``struct ufat_device`` is passed with each call to

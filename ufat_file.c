@@ -354,8 +354,7 @@ static int write_blocks(struct ufat_file *f, const char *buf, ufat_size_t size)
 	if (i < 0)
 		return i;
 
-	i = uf->dev->write(uf->dev, starting_block, requested_blocks,
-			   (const uint8_t *)buf);
+	i = uf->dev->write(uf->dev, starting_block, requested_blocks, buf);
 	if (i < 0)
 		return -UFAT_ERR_IO;
 
