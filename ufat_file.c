@@ -182,7 +182,7 @@ static int read_blocks(struct ufat_file *f, char *buf, ufat_size_t size)
 	return requested_blocks << log2_block_size;
 }
 
-int ufat_file_read(struct ufat_file *f, char *buf, ufat_size_t size)
+int ufat_file_read(struct ufat_file *f, void *buf, ufat_size_t size)
 {
 	ufat_size_t total;
 	int len;
@@ -196,7 +196,7 @@ int ufat_file_read(struct ufat_file *f, char *buf, ufat_size_t size)
 	if (len < 0)
 		return len;
 
-	buf += len;
+	buf = (char*)buf + len;
 	size -= len;
 
 	/* Read contiguous blocks within a cluster */
@@ -209,7 +209,7 @@ int ufat_file_read(struct ufat_file *f, char *buf, ufat_size_t size)
 		if (!ret)
 			break;
 
-		buf += ret;
+		buf = (char*)buf + len;
 		size -= ret;
 	}
 
@@ -218,7 +218,7 @@ int ufat_file_read(struct ufat_file *f, char *buf, ufat_size_t size)
 	if (len < 0)
 		return len;
 
-	buf += len;
+	buf = (char*)buf + len;
 	size -= len;
 
 	return total;
