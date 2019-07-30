@@ -368,7 +368,7 @@ static int write_blocks(struct ufat_file *f, const char *buf, ufat_size_t size)
 	return requested_blocks << log2_block_size;
 }
 
-int ufat_file_write(struct ufat_file *f, const char *buf, ufat_size_t len)
+int ufat_file_write(struct ufat_file *f, const void *buf, ufat_size_t len)
 {
 	const ufat_size_t max_write = ~f->cur_pos;
 	ufat_size_t total;
@@ -383,7 +383,7 @@ int ufat_file_write(struct ufat_file *f, const char *buf, ufat_size_t len)
 	if (i < 0)
 		return i;
 
-	buf += i;
+	buf = (const char*)buf + i;
 	len -= i;
 
 	/* Write complete blocks */
@@ -396,7 +396,7 @@ int ufat_file_write(struct ufat_file *f, const char *buf, ufat_size_t len)
 		if (!i)
 			break;
 
-		buf += i;
+		buf = (const char*)buf + i;
 		len -= i;
 	}
 
