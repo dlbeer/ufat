@@ -168,8 +168,7 @@ static int read_blocks(struct ufat_file *f, char *buf, ufat_size_t size)
 	if (i < 0)
 		return i;
 
-	i = uf->dev->read(uf->dev, starting_block, requested_blocks,
-			  (uint8_t *)buf);
+	i = uf->dev->read(uf->dev, starting_block, requested_blocks, buf);
 	if (i < 0)
 		return -UFAT_ERR_IO;
 

@@ -54,9 +54,8 @@ typedef unsigned long long ufat_block_t;
  */
 struct ufat_device {
 	unsigned int	log2_block_size;
-	int		(*read)(const struct ufat_device *dev,
-				ufat_block_t start, ufat_block_t count,
-				unsigned char *buffer);
+	int		(*read)(const struct ufat_device *dev, ufat_block_t start,
+				ufat_block_t count, void *buffer);
 	int		(*write)(const struct ufat_device *dev,
 				 ufat_block_t start, ufat_block_t count,
 				 const unsigned char *buffer);
