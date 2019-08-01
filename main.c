@@ -75,7 +75,7 @@ struct file_device {
 };
 
 static int file_device_read(const struct ufat_device *dev, ufat_block_t start,
-			    ufat_block_t count, unsigned char *buffer)
+			    ufat_block_t count, void *buffer)
 {
 	struct file_device *f = (struct file_device *)dev;
 
@@ -99,7 +99,7 @@ static int file_device_read(const struct ufat_device *dev, ufat_block_t start,
 }
 
 static int file_device_write(const struct ufat_device *dev, ufat_block_t start,
-			     ufat_block_t count, const unsigned char *buffer)
+			     ufat_block_t count, const void *buffer)
 {
 	struct file_device *f = (struct file_device *)dev;
 

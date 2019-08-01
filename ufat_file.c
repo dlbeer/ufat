@@ -168,8 +168,7 @@ static int read_blocks(struct ufat_file *f, char *buf, ufat_size_t size)
 	if (i < 0)
 		return i;
 
-	i = uf->dev->read(uf->dev, starting_block, requested_blocks,
-			  (uint8_t *)buf);
+	i = uf->dev->read(uf->dev, starting_block, requested_blocks, buf);
 	if (i < 0)
 		return -UFAT_ERR_IO;
 
@@ -183,7 +182,7 @@ static int read_blocks(struct ufat_file *f, char *buf, ufat_size_t size)
 	return requested_blocks << log2_block_size;
 }
 
-int ufat_file_read(struct ufat_file *f, char *buf, ufat_size_t size)
+int ufat_file_read(struct ufat_file *f, void *buf, ufat_size_t size)
 {
 	ufat_size_t total;
 	int len;
@@ -197,7 +196,7 @@ int ufat_file_read(struct ufat_file *f, char *buf, ufat_size_t size)
 	if (len < 0)
 		return len;
 
-	buf += len;
+	buf = (char*)buf + len;
 	size -= len;
 
 	/* Read contiguous blocks within a cluster */
@@ -210,7 +209,7 @@ int ufat_file_read(struct ufat_file *f, char *buf, ufat_size_t size)
 		if (!ret)
 			break;
 
-		buf += ret;
+		buf = (char*)buf + len;
 		size -= ret;
 	}
 
@@ -218,9 +217,6 @@ int ufat_file_read(struct ufat_file *f, char *buf, ufat_size_t size)
 	len = read_block_fragment(f, buf, size);
 	if (len < 0)
 		return len;
-
-	buf += len;
-	size -= len;
 
 	return total;
 }
@@ -355,8 +351,7 @@ static int write_blocks(struct ufat_file *f, const char *buf, ufat_size_t size)
 	if (i < 0)
 		return i;
 
-	i = uf->dev->write(uf->dev, starting_block, requested_blocks,
-			   (const uint8_t *)buf);
+	i = uf->dev->write(uf->dev, starting_block, requested_blocks, buf);
 	if (i < 0)
 		return -UFAT_ERR_IO;
 
@@ -370,7 +365,7 @@ static int write_blocks(struct ufat_file *f, const char *buf, ufat_size_t size)
 	return requested_blocks << log2_block_size;
 }
 
-int ufat_file_write(struct ufat_file *f, const char *buf, ufat_size_t len)
+int ufat_file_write(struct ufat_file *f, const void *buf, ufat_size_t len)
 {
 	const ufat_size_t max_write = ~f->cur_pos;
 	ufat_size_t total;
@@ -385,7 +380,7 @@ int ufat_file_write(struct ufat_file *f, const char *buf, ufat_size_t len)
 	if (i < 0)
 		return i;
 
-	buf += i;
+	buf = (const char*)buf + i;
 	len -= i;
 
 	/* Write complete blocks */
@@ -398,7 +393,7 @@ int ufat_file_write(struct ufat_file *f, const char *buf, ufat_size_t len)
 		if (!i)
 			break;
 
-		buf += i;
+		buf = (const char*)buf + i;
 		len -= i;
 	}
 

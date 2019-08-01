@@ -54,12 +54,10 @@ typedef unsigned long long ufat_block_t;
  */
 struct ufat_device {
 	unsigned int	log2_block_size;
-	int		(*read)(const struct ufat_device *dev,
-				ufat_block_t start, ufat_block_t count,
-				unsigned char *buffer);
-	int		(*write)(const struct ufat_device *dev,
-				 ufat_block_t start, ufat_block_t count,
-				 const unsigned char *buffer);
+	int		(*read)(const struct ufat_device *dev, ufat_block_t start,
+				ufat_block_t count, void *buffer);
+	int		(*write)(const struct ufat_device *dev, ufat_block_t start,
+				ufat_block_t count, const void *buffer);
 };
 
 /* Cache parameters. The more cache is used, the fewer filesystem reads/writes
@@ -284,8 +282,8 @@ int ufat_open_file(struct ufat *uf, struct ufat_file *f,
 		   const struct ufat_dirent *ent);
 void ufat_file_rewind(struct ufat_file *f);
 int ufat_file_advance(struct ufat_file *f, ufat_size_t nbytes);
-int ufat_file_read(struct ufat_file *f, char *buf, ufat_size_t max_size);
-int ufat_file_write(struct ufat_file *f, const char *buf, ufat_size_t len);
+int ufat_file_read(struct ufat_file *f, void *buf, ufat_size_t max_size);
+int ufat_file_write(struct ufat_file *f, const void *buf, ufat_size_t len);
 int ufat_file_truncate(struct ufat_file *f);
 
 /* Filesystem creation */

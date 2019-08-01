@@ -32,13 +32,11 @@ though a structure containing some key parameters and access functions:
     typedef unsigned long long ufat_block_t;
 
     struct ufat_device {
-	    unsigned int	log2_block_size;
-	    int			(*read)(const struct ufat_device *dev,
-					ufat_block_t start, ufat_block_t count,
-					unsigned char *buffer);
-	    int			(*write)(const struct ufat_device *dev,
-					 ufat_block_t start, ufat_block_t count,
-					 const unsigned char *buffer);
+      unsigned int  log2_block_size;
+      int   (*read)(const struct ufat_device *dev, ufat_block_t start,
+            ufat_block_t count, void *buffer);
+      int   (*write)(const struct ufat_device *dev, ufat_block_t start,
+            ufat_block_t count, const void *buffer);
     };
 
 A pointer to the ``struct ufat_device`` is passed with each call to
@@ -62,8 +60,8 @@ ufat_device`` for the partition/device you want to access, Use
 
     err = ufat_open(&uf, &dev);
     if (err < 0) {
-	    fprintf(stderr, "Error: %s\n", ufat_strerror(err));
-	    return -1;
+      fprintf(stderr, "Error: %s\n", ufat_strerror(err));
+      return -1;
     }
 
     /* ... */
@@ -110,8 +108,8 @@ Directories may be traversed by a series of
 slash-separated path is known, the following function is useful:
 
     int ufat_dir_find_path(struct ufat_directory *dir,
-			   const char *path, struct ufat_dirent *inf,
-			   const char **path_out);
+              const char *path, struct ufat_dirent *inf,
+              const char **path_out);
 
 Its arguments are:
 
