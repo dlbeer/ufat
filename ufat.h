@@ -165,6 +165,26 @@ const char *ufat_strerror(int err);
  */
 int ufat_open(struct ufat *uf, const struct ufat_device *dev);
 int ufat_sync(struct ufat *uf);
+
+/**
+ * \brief Count number of free clusters.
+ *
+ * The total number of available clusters is `uf->bpb.num_clusters - 2` (first
+ * two clusters are reserved). `uf->bpb.log2_blocks_per_cluster` can be used to
+ * convert number of clusters to number of blocks and these can be converted to
+ * bytes by multiplying with `1 << uf->dev->log2_block_size`.
+ *
+ * \pre Both `uf` and `free_clusters` are valid pointers.
+ * \pre File system pointed by `uf` is opened.
+ *
+ * \param [in] uf is a pointer to `ufat` struct
+ * \param [out] free_clusters is a pointer to a variable into which the count
+ * of free clusters will be written
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
+int ufat_count_free_clusters(struct ufat *uf, ufat_cluster_t *free_clusters);
 void ufat_close(struct ufat *uf);
 
 /* Directory reading. */

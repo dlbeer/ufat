@@ -312,6 +312,33 @@ int ufat_sync(struct ufat *uf)
 	return ret;
 }
 
+int ufat_count_free_clusters(struct ufat *uf, ufat_cluster_t *free_clusters)
+{
+	ufat_cluster_t idx;
+	ufat_cluster_t local_free_clusters = 0;
+	const ufat_cluster_t total = uf->bpb.num_clusters;
+
+	/* Skip first two "special" clusters */
+	for (idx = 2; idx < total; idx++) {
+		ufat_cluster_t c;
+		int err;
+
+		/* Never use this cluster index in a FAT12 system */
+		if (idx == 0xff0 && uf->bpb.type == UFAT_TYPE_FAT12)
+			continue;
+
+		err = ufat_read_fat(uf, idx, &c);
+		if (err < 0)
+			return err;
+
+		if (c == UFAT_CLUSTER_FREE)
+			local_free_clusters++;
+	}
+
+	*free_clusters = local_free_clusters;
+	return 0;
+}
+
 void ufat_close(struct ufat *uf)
 {
 	ufat_sync(uf);
