@@ -183,9 +183,9 @@ int ufat_sync(struct ufat *uf);
  * bytes by multiplying with `1 << uf->dev->log2_block_size`.
  *
  * \pre Both `uf` and `free_clusters` are valid pointers.
- * \pre File system pointed by `uf` is opened.
+ * \pre The filesystem pointed by `uf` is opened.
  *
- * \param [in] uf is a pointer to `ufat` struct
+ * \param [in] uf is a pointer to the filesystem
  * \param [out] free_clusters is a pointer to a variable into which the count
  * of free clusters will be written
  *
