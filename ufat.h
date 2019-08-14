@@ -41,21 +41,29 @@ extern "C"
 {
 #endif	/* def __cplusplus */
 
-/* Block counts and indices are held in this type. */
+/** Block counts and indices are held in this type. */
 typedef unsigned long long ufat_block_t;
 
 #define UFAT_BLOCK_NONE ((ufat_block_t)0xffffffffffffffffLL)
 
-/* This structure is the interface to a block device. Read and write methods
- * must be provided, which return 0 on success or -1 if an error occurs.
- *
- * The number of blocks must be specified, and the block size is specified by
- * giving it's base-2 logarithm.
+/**
+ * This structure is the interface to a block device. All fields must be
+ * provided.
  */
+
 struct ufat_device {
+	/** Base-2 logarithm of size of block, bytes */
 	unsigned int	log2_block_size;
+	/**
+	 * Pointer to function used to read data from block device. Should
+	 * return 0 on success or -1 if an error occurs.
+	 */
 	int		(*read)(const struct ufat_device *dev, ufat_block_t start,
 				ufat_block_t count, void *buffer);
+	/**
+	 * Pointer to function used to write data to block device. Should
+	 * return 0 on success or -1 if an error occurs.
+	 */
 	int		(*write)(const struct ufat_device *dev, ufat_block_t start,
 				ufat_block_t count, const void *buffer);
 };
@@ -75,7 +83,7 @@ struct ufat_cache_desc {
 	ufat_block_t	index;
 };
 
-/* Performance accounting statistics. */
+/** Performance accounting statistics. */
 struct ufat_stat {
 	unsigned int		read;
 	unsigned int		write;
@@ -89,7 +97,6 @@ struct ufat_stat {
 	unsigned int		cache_flush;
 };
 
-/* Data read/calculated from the BIOS Parameter Block (read-only) */
 typedef uint32_t		ufat_cluster_t;
 typedef uint32_t		ufat_size_t;
 
@@ -105,6 +112,7 @@ typedef enum {
 	UFAT_TYPE_FAT32		= 32
 } ufat_fat_type_t;
 
+/** Data read/calculated from the BIOS Parameter Block (read-only) */
 struct ufat_bpb {
 	ufat_fat_type_t		type;
 	unsigned int		log2_blocks_per_cluster;
@@ -121,7 +129,7 @@ struct ufat_bpb {
 	ufat_cluster_t		root_cluster;
 };
 
-/* This structure holds the data for an open filesystem. */
+/** This structure holds the data for an open filesystem. */
 struct ufat {
 	const struct ufat_device	*dev;
 
@@ -136,7 +144,7 @@ struct ufat {
 	uint8_t				cache_data[UFAT_CACHE_BYTES];
 };
 
-/* Error codes. */
+/** Error codes. */
 typedef enum {
 	UFAT_OK = 0,
 	UFAT_ERR_IO,
