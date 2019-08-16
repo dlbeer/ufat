@@ -291,6 +291,7 @@ int ufat_open(struct ufat *uf, const struct ufat_device *dev)
 	if (!uf->cache_size)
 		return -UFAT_ERR_BLOCK_SIZE;
 
+	uf->alloc_ptr = 0;
 	memset(&uf->stat, 0, sizeof(uf->stat));
 	memset(&uf->cache_desc, 0, sizeof(uf->cache_desc));
 

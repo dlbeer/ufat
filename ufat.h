@@ -41,21 +41,29 @@ extern "C"
 {
 #endif	/* def __cplusplus */
 
-/* Block counts and indices are held in this type. */
+/** Block counts and indices are held in this type. */
 typedef unsigned long long ufat_block_t;
 
 #define UFAT_BLOCK_NONE ((ufat_block_t)0xffffffffffffffffLL)
 
-/* This structure is the interface to a block device. Read and write methods
- * must be provided, which return 0 on success or -1 if an error occurs.
- *
- * The number of blocks must be specified, and the block size is specified by
- * giving it's base-2 logarithm.
+/**
+ * This structure is the interface to a block device. All fields must be
+ * provided.
  */
+
 struct ufat_device {
+	/** Base-2 logarithm of size of block, bytes */
 	unsigned int	log2_block_size;
+	/**
+	 * Pointer to function used to read data from block device. Should
+	 * return 0 on success or -1 if an error occurs.
+	 */
 	int		(*read)(const struct ufat_device *dev, ufat_block_t start,
 				ufat_block_t count, void *buffer);
+	/**
+	 * Pointer to function used to write data to block device. Should
+	 * return 0 on success or -1 if an error occurs.
+	 */
 	int		(*write)(const struct ufat_device *dev, ufat_block_t start,
 				ufat_block_t count, const void *buffer);
 };
@@ -75,7 +83,7 @@ struct ufat_cache_desc {
 	ufat_block_t	index;
 };
 
-/* Performance accounting statistics. */
+/** Performance accounting statistics. */
 struct ufat_stat {
 	unsigned int		read;
 	unsigned int		write;
@@ -89,7 +97,6 @@ struct ufat_stat {
 	unsigned int		cache_flush;
 };
 
-/* Data read/calculated from the BIOS Parameter Block (read-only) */
 typedef uint32_t		ufat_cluster_t;
 typedef uint32_t		ufat_size_t;
 
@@ -105,6 +112,7 @@ typedef enum {
 	UFAT_TYPE_FAT32		= 32
 } ufat_fat_type_t;
 
+/** Data read/calculated from the BIOS Parameter Block (read-only) */
 struct ufat_bpb {
 	ufat_fat_type_t		type;
 	unsigned int		log2_blocks_per_cluster;
@@ -121,7 +129,7 @@ struct ufat_bpb {
 	ufat_cluster_t		root_cluster;
 };
 
-/* This structure holds the data for an open filesystem. */
+/** This structure holds the data for an open filesystem. */
 struct ufat {
 	const struct ufat_device	*dev;
 
@@ -136,7 +144,7 @@ struct ufat {
 	uint8_t				cache_data[UFAT_CACHE_BYTES];
 };
 
-/* Error codes. */
+/** Error codes. */
 typedef enum {
 	UFAT_OK = 0,
 	UFAT_ERR_IO,
@@ -157,13 +165,43 @@ typedef enum {
 	UFAT_MAX_ERR
 } ufat_error_t;
 
+/**
+ * \brief Translates uFAT error code into human-readable string.
+ *
+ * \param [in] err is an uFAT error code
+ *
+ * \return `err` translated to human-readable string
+ */
+
 const char *ufat_strerror(int err);
 
-/* Open/close a filesystem. Returns 0 on success or a negative error
- * code if an error occurs. The ufat_dev pointer must remain valid for
- * the lifetime of the ufat object.
+/**
+ * \brief Opens the filesystem.
+ *
+ * \pre Both `uf` and `dev` are valid pointers, they must remain valid until the
+ * filesystem is closed.
+ * \pre The filesystem pointed by `uf` is not opened.
+ *
+ * \param [out] uf is a pointer to a variable into which the filesystem will
+ * be opened
+ * \param [in] dev is a pointer to a block device
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
  */
+
 int ufat_open(struct ufat *uf, const struct ufat_device *dev);
+
+/**
+ * \brief Synchronizes the filesystem by flushing cache.
+ *
+ * \pre `uf` is a valid pointer.
+ * \pre The filesystem pointed by `uf` is opened.
+ *
+ * \param [in] uf is a pointer to the filesystem
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
 int ufat_sync(struct ufat *uf);
 
 /**
@@ -175,9 +213,9 @@ int ufat_sync(struct ufat *uf);
  * bytes by multiplying with `1 << uf->dev->log2_block_size`.
  *
  * \pre Both `uf` and `free_clusters` are valid pointers.
- * \pre File system pointed by `uf` is opened.
+ * \pre The filesystem pointed by `uf` is opened.
  *
- * \param [in] uf is a pointer to `ufat` struct
+ * \param [in] uf is a pointer to the filesystem
  * \param [out] free_clusters is a pointer to a variable into which the count
  * of free clusters will be written
  *
@@ -185,6 +223,18 @@ int ufat_sync(struct ufat *uf);
  */
 
 int ufat_count_free_clusters(struct ufat *uf, ufat_cluster_t *free_clusters);
+
+/**
+ * \brief Closes filesystem.
+ *
+ * \pre `uf` is a valid pointer.
+ * \pre The filesystem pointed by `uf` is opened.
+ *
+ * \post The filesystem pointed by `uf` is not opened.
+ *
+ * \param [in] uf is a pointer to the filesystem
+ */
+
 void ufat_close(struct ufat *uf);
 
 /* Directory reading. */
@@ -245,40 +295,220 @@ struct ufat_directory {
 #define UFAT_LFN_MAX_CHARS	255
 #define UFAT_LFN_MAX_UTF8	768
 
+/**
+ * \brief Opens root directory.
+ *
+ * \pre Both `uf` and `dir` are valid pointers.
+ * \pre The filesystem pointed by `uf` is opened.
+ *
+ * \post The directory pointed by `dir` is opened.
+ *
+ * \param [in] uf is a pointer to the filesystem
+ * \param [out] dir is a pointer to a variable into which root directory will be
+ * opened
+ */
+
 void ufat_open_root(struct ufat *uf, struct ufat_directory *dir);
+
+/**
+ * \brief Opens subdirectory.
+ *
+ * \pre `uf`, `dir` and `ent` are valid pointers.
+ * \pre The filesystem pointed by `uf` is opened.
+ * \pre Directory entry pointed by `ent` is a result of a successful
+ * create/find/move/read operation.
+ *
+ * \param [in] uf is a pointer to the filesystem
+ * \param [out] dir is a pointer to a variable into which the subdirectory will
+ * be opened
+ * \param [in] ent is a pointer to a directory entry representing the
+ * subdirectory which will be opened
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
 int ufat_open_subdir(struct ufat *uf, struct ufat_directory *dir,
 		     const struct ufat_dirent *ent);
 
+/**
+ * \brief Rewinds directory position.
+ *
+ * \pre `dir` is a valid pointer.
+ * \pre The directory pointed by `dir` is opened.
+ *
+ * \post Position of directory pointed by `dir` is rewound.
+ *
+ * \param [in] dir is a pointer to a directory
+ */
+
 void ufat_dir_rewind(struct ufat_directory *dir);
-int ufat_dir_read(struct ufat_directory *dir,
-		  struct ufat_dirent *inf,
+
+/**
+ * \brief Reads one entry from the directory.
+ *
+ * \pre Both `dir` and `inf` are valid pointers.
+ * \pre The directory pointed by `dir` is opened.
+ *
+ * \param [in] dir is a pointer to a directory
+ * \param [out] inf is a pointer to a variable into which the directory entry
+ * will be read
+ * \param [out] name_buf is the buffer for long filename, `NULL` if long
+ * filename is not needed
+ * \param [in] max_len is the size of `name_buf`, bytes, ignored if
+ * `name_buf == NULL`
+ *
+ * \return 0 on success, 1 if end of `dir` was reached, negative error code
+ * (`ufat_error_t`) otherwise
+ */
+
+int ufat_dir_read(struct ufat_directory *dir, struct ufat_dirent *inf,
 		  char *name_buf, int max_len);
+
+/**
+ * \brief Deletes file or directory.
+ *
+ * \pre Both `uf` and `ent` are valid pointers.
+ * \pre The filesystem pointed by `uf` is opened.
+ * \pre Directory entry pointed by `ent` is a result of a successful
+ * create/find/move/read operation.
+ *
+ * \param [in] uf is a pointer to the filesystem
+ * \param [in] ent is a pointer to a directory entry representing the
+ * file/directory which will be deleted
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
 int ufat_dir_delete(struct ufat *uf, struct ufat_dirent *ent);
+
+/**
+ * \brief Creates a directory.
+ *
+ * \pre `dir`, `ent` and `name` are valid pointers.
+ * \pre The directory pointed by `dir` is opened.
+ *
+ * \param [in] dir is a pointer to a directory
+ * \param [out] ent is a pointer to a variable into which the directory entry of
+ * created directory will be written
+ * \param [in] name is a string with name of directory that will be created
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
 int ufat_dir_create(struct ufat_directory *dir, struct ufat_dirent *ent,
 		    const char *name);
+
+/**
+ * \brief Creates a file.
+ *
+ * \pre `dir`, `ent` and `name` are valid pointers.
+ * \pre The directory pointed by `dir` is opened.
+ *
+ * \param [in] dir is a pointer to a directory
+ * \param [out] ent is a pointer to a variable into which the directory entry of
+ * created file will be written
+ * \param [in] name is a string with name of file that will be created
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
 int ufat_dir_mkfile(struct ufat_directory *dir, struct ufat_dirent *ent,
 		    const char *name);
 
-/* Search for a file by name. These functions return 0 on success, 1 if
- * the file doesn't exist, or -1 if an error occurs.
+/**
+ * \brief Searches for an entry by name in given directory.
+ *
+ * \pre `dir`, `name` and `inf` are valid pointers.
+ * \pre The directory pointed by `dir` is opened.
+ *
+ * \param [in] dir is a pointer to a directory
+ * \param [in] name is a string with name of searched-for entry
+ * \param [out] inf is a pointer to a variable into which the found directory
+ * entry will be written
+ *
+ * \return 0 on success, 1 if entry does not exist, negative error code
+ * (`ufat_error_t`) otherwise
  */
-int ufat_dir_find(struct ufat_directory *dir,
-		  const char *name, struct ufat_dirent *inf);
-int ufat_dir_find_path(struct ufat_directory *dir,
-		       const char *path, struct ufat_dirent *inf,
-		       const char **path_out);
 
-/* Read the canonical long filename for a dirent. */
-int ufat_get_filename(struct ufat *uf,
-		      const struct ufat_dirent *ent,
+int ufat_dir_find(struct ufat_directory *dir, const char *name,
+		  struct ufat_dirent *inf);
+
+/**
+ * \brief Searches for an entry by path in given directory.
+ *
+ * \pre `dir`, `path` and `inf` are valid pointers.
+ * \pre The directory pointed by `dir` is opened.
+ *
+ * \param [in] dir is a pointer to a directory, it will be updated to the
+ * directory where the search terminated
+ * \param [in] path is a string with path of searched-for entry, relative to
+ * `dir`
+ * \param [out] inf is a pointer to a variable into which the found directory
+ * entry will be written
+ * \param [out] path_out is a pointer to a variable into which the pointer to
+ * not-processed part of `path` will be written, `NULL` if not required
+ *
+ * \return 0 on success, 1 if entry does not exist, negative error code
+ * (`ufat_error_t`) otherwise
+ */
+
+int ufat_dir_find_path(struct ufat_directory *dir, const char *path,
+		       struct ufat_dirent *inf, const char **path_out);
+
+/**
+ * \brief Reads canonical long filename for a directory entry.
+ *
+ * \pre `uf`, `ent` and `name_buf` are valid pointers.
+ * \pre The filesystem pointed by `uf` is opened.
+ * \pre Directory entry pointed by `ent` is a result of a successful
+ * create/find/move/read operation.
+ *
+ * \param [in] uf is a pointer to the filesystem
+ * \param [in] ent is a pointer to a directory entry for which the canonical
+ * long filename will be read
+ * \param [out] name_buf is the buffer for canonical long filename
+ * \param [in] max_len is the size of `name_buf`, bytes
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
+int ufat_get_filename(struct ufat *uf, const struct ufat_dirent *ent,
 		      char *name_buf, int max_len);
 
-/* Alter the dates, times and attributes a directory entry */
+/**
+ * \brief Alters the dates, times and attributes of a directory entry.
+ *
+ * \pre Both `uf` and `ent` are valid pointers.
+ * \pre The filesystem pointed by `uf` is opened.
+ * \pre Directory entry pointed by `ent` is a result of a successful
+ * create/find/move/read operation.
+ *
+ * \param [in] uf is a pointer to the filesystem
+ * \param [in] ent is a pointer to a directory entry for which attributes will
+ * be updated
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
 int ufat_update_attributes(struct ufat *uf, struct ufat_dirent *ent);
 
-/* Remove a file from its containing directory and reinsert it in (possibly
- * the same) directory. The dirent structure will be modified.
+/**
+ * \brief Removes a file or directory from its containing directory and
+ * reinserts it in (possibly the same) directory.
+ *
+ * \pre `ent`, `dst` and `new_name` are valid pointers.
+ * \pre Directory entry pointed by `ent` is a result of a successful
+ * create/find/move/read operation.
+ * \pre Directory pointed by `dst` is opened.
+ *
+ * \param [in] ent is a pointer to a directory entry which will be moved, it
+ * will be modified after successful operation
+ * \param [in] dst is a pointer to directory to which `ent` will be moved
+ * \param [in] new_name is a string with new name for `ent`
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
  */
+
 int ufat_move(struct ufat_dirent *ent, struct ufat_directory *dst,
 	      const char *new_name);
 
@@ -298,15 +528,109 @@ struct ufat_file {
 	ufat_size_t		cur_pos;
 };
 
+/**
+ * \brief Opens a file.
+ *
+ * \pre `uf`, `f` and `ent` are valid pointers.
+ * \pre The filesystem pointed by `uf` is opened.
+ * \pre Directory entry pointed by `ent` is a result of a successful
+ * create/find/move/read operation.
+ *
+ * \param [in] uf is a pointer to the filesystem
+ * \param [out] f is a pointer to a variable into which the file will be opened
+ * \param [in] ent is a pointer to a directory entry of file which will be
+ * opened
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
 int ufat_open_file(struct ufat *uf, struct ufat_file *f,
 		   const struct ufat_dirent *ent);
+
+/**
+ * \brief Rewinds file position.
+ *
+ * \pre `f` is a valid pointer.
+ * \pre File pointed by `f` is opened.
+ *
+ * \post Position of file pointed by `f` is rewound.
+ *
+ * \param [in] f is a pointer to a file
+ */
+
 void ufat_file_rewind(struct ufat_file *f);
+
+/**
+ * \brief Advances file position.
+ *
+ * \pre `f` is a valid pointer.
+ * \pre File pointed by `f` is opened.
+ *
+ * \param [in] f is a pointer to a file
+ * \param [in] nbytes is the number of bytes by which file position will be
+ * advanced
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
 int ufat_file_advance(struct ufat_file *f, ufat_size_t nbytes);
+
+/**
+ * \brief Reads data from file.
+ *
+ * \pre Both `f` and `buf` are valid pointers.
+ * \pre File pointed by `f` is opened.
+ *
+ * \param [in] f is a pointer to a file
+ * \param [out] buf is a pointer to a buffer into which the data will be read
+ * \param [in] max_size is the number of bytes to read
+ *
+ * \return number of read bytes on success, negative error code (`ufat_error_t`)
+ * otherwise
+ */
+
 int ufat_file_read(struct ufat_file *f, void *buf, ufat_size_t max_size);
+
+/**
+ * \brief Writes data to file.
+ *
+ * \pre Both `f` and `buf` are valid pointers.
+ * \pre File pointed by `f` is opened.
+ *
+ * \param [in] f is a pointer to a file
+ * \param [in] buf is a pointer to a buffer with data that will be written
+ * \param [in] len is the number of bytes to write
+ *
+ * \return number of written bytes on success, negative error code
+ * (`ufat_error_t`) otherwise
+ */
+
 int ufat_file_write(struct ufat_file *f, const void *buf, ufat_size_t len);
+
+/**
+ * \brief Truncates file.
+ *
+ * \pre `f` is a valid pointer.
+ * \pre File pointed by `f` is opened.
+ *
+ * \param [in] f is a pointer to a file
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
 int ufat_file_truncate(struct ufat_file *f);
 
-/* Filesystem creation */
+/**
+ * \brief Creates filesystem on block device.
+ *
+ * \pre `dev` is a valid pointer.
+ *
+ * \param [in] dev is a pointer to a block device
+ * \param [in] nblk is the number of blocks on `dev`
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
 int ufat_mkfs(struct ufat_device *dev, ufat_block_t nblk);
 
 #ifdef __cplusplus
