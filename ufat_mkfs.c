@@ -330,6 +330,7 @@ static int init_fat32(struct ufat_device *dev, const struct fs_layout *fl)
 		if (!i) {
 			w32(buf + 0, 0xffffff00 | MEDIA_DISK);
 			w32(buf + 4, 0xfffffff8);
+			w32(buf + 8, 0xfffffff8);
 		}
 
 		if (dev->write(dev, fl->reserved_blocks + i, 1, buf) < 0 ||
