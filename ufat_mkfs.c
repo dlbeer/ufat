@@ -60,91 +60,106 @@ static int calculate_layout(struct fs_layout *fl,
 			    ufat_block_t nblk,
 			    unsigned int log2_block_size)
 {
+	unsigned int log2_bps;
+	unsigned int log2_spc;
+	uint32_t nsect;
+	ufat_cluster_t clusters_threshold;
 	ufat_cluster_t est_clusters;
 	uint32_t fat_bytes;
 
-	/* Make sure the block size is greater than our minimum supported
-	 * sector size.
+	/* Make sure the block size is less than or equal to maximum sector
+	 * size (4 kB, log2(4096) = 12).
 	 */
-	if (log2_block_size < 9)
+	if (log2_block_size > 12)
 		return -UFAT_ERR_BLOCK_SIZE;
 
-	/* Default sector size is 512, but this is increased if we can't
-	 * store the total logical sector count in a 32-bit word.
+	/* Minimum sector size is 512 B (log2(512) = 9), but it cannot be
+	 * smaller than block size.
 	 */
-	fl->log2_sector_size = 9;
-	while ((fl->log2_sector_size < log2_block_size) &&
-	       (fl->log2_sector_size < 32768) &&
-	       (nblk >> (fl->log2_sector_size + 32)))
-		fl->log2_sector_size++;
+	log2_bps = log2_block_size < 9 ? 9 - log2_block_size : 0;
+
+	/* Increase sector size if we can't store the total logical sector count
+	 * in a 32-bit variable.
+	 */
+	while (log2_block_size + log2_bps < 12 &&
+	       nblk >> log2_bps > UINT32_MAX)
+		++log2_bps;
 
 	/* If we still can't fit it, we'll have to chop the device. */
-	if (nblk >> (fl->log2_sector_size + 32))
-		nblk = 0xffffffffLL << fl->log2_sector_size;
+	if (nblk >> log2_bps > UINT32_MAX)
+		nblk = (ufat_block_t)UINT32_MAX << log2_bps;
 
-	/* Choose the smallest cluster size greater than 1 kB which keeps
-	 * us within the FAT entry count limit.
-	 */
-	if (log2_block_size > 10)
-		fl->log2_bpc = 0;
-	else
-		fl->log2_bpc = 10 - log2_block_size;
+	fl->log2_sector_size = log2_block_size + log2_bps;
 
-	while (fl->log2_bpc + log2_block_size < fl->log2_sector_size + 7 &&
-	       (nblk >> fl->log2_bpc) >= 0x10000000LL)
-		fl->log2_bpc++;
+	/* Calculate total logical sector count. */
+	nsect = nblk >> log2_bps;
 
-	/* If we still can't fit it, we'll have to chop the device. */
-	if (nblk >> fl->log2_bpc >= 0x10000000LL)
-		nblk = 0xfffffffLL << fl->log2_bpc;
-
-	/* Calculate the number of reserved blocks */
+	/* Calculate the number of reserved blocks. */
 	fl->reserved_blocks = bytes_to_blocks(log2_block_size,
 					      2 << fl->log2_sector_size) << 1;
 
-	/* Calculate the minimum size of the root directory (FAT12/FAT16). */
-	fl->root_blocks = bytes_to_blocks(log2_block_size, 16384);
+	/* Threshold values taken from "fatgen103.pdf" -
+	 * https://staff.washington.edu/dittrich/misc/fatgen103.pdf - "FAT
+	 * Volume Initialization" chapter.
+	 *
+	 * For a device with typical 512 B block size this selects FAT12 for
+	 * device size less than ~4.1 MB, FAT16 for device size less than 512 MB
+	 * and FAT32 otherwise.
+	 */
+	if (nsect < 8400) {
+		fl->type = UFAT_TYPE_FAT12;
+		clusters_threshold = 1 << 12;
+		log2_spc = 1;
+	} else if (nsect < 1048576) {
+		fl->type = UFAT_TYPE_FAT16;
+		clusters_threshold = 1 << 16;
+		log2_spc = 1;
+	} else {
+		fl->type = UFAT_TYPE_FAT32;
+		clusters_threshold = 2097152;
+		log2_spc = 3;
+	}
+
+	/* Increase cluster size if the resulting number of clusters would be
+	 * above the threshold, but keep it below 32 kB (log2(32768) = 15).
+	 */
+	while (log2_spc < 7 &&
+	       fl->log2_sector_size + log2_spc < 15 &&
+	       nsect >> log2_spc > clusters_threshold)
+		++log2_spc;
+
+	fl->log2_bpc = log2_bps + log2_spc;
 
 	/* Estimate an upper bound on the cluster count and allocate blocks
 	 * for the FAT.
 	 */
 	est_clusters = ((nblk - fl->reserved_blocks) >> fl->log2_bpc) + 2;
 
-	if (est_clusters > UFAT_MAX_FAT16)
+	if (fl->type == UFAT_TYPE_FAT32)
 		fat_bytes = est_clusters << 2;
-	else if (est_clusters >= UFAT_MAX_FAT12)
+	else if (fl->type == UFAT_TYPE_FAT16)
 		fat_bytes = est_clusters << 1;
 	else
 		fat_bytes = (est_clusters * 3 + 1) >> 1;
 
 	fl->fat_blocks = bytes_to_blocks(log2_block_size, fat_bytes);
 
-	/* Finalize the actual cluster count and FAT type. The final cluster
-	 * count can't be greater than the estimate.
+	/* Calculate the minimum size of the root directory. */
+	fl->root_blocks = fl->type != UFAT_TYPE_FAT32 ?
+	                  bytes_to_blocks(log2_block_size, 16384) : 0;
+
+	/* Finalize the actual cluster count - it can't be greater than the
+	 * estimate.
 	 */
 	fl->clusters = ((nblk - fl->reserved_blocks -
 			 fl->root_blocks - fl->fat_blocks * 2) >>
 			fl->log2_bpc) + 2;
 
-	if (fl->clusters > UFAT_MAX_FAT16)
-		fl->type = UFAT_TYPE_FAT32;
-	else if (fl->clusters > UFAT_MAX_FAT12)
-		fl->type = UFAT_TYPE_FAT16;
-	else
-		fl->type = UFAT_TYPE_FAT12;
-
-	/* If FAT32, consume root directory blocks for clusters. Otherwise,
-	 * expand root directory to fill unusable data space.
-	 */
-	if (fl->type == UFAT_TYPE_FAT32) {
-		fl->root_blocks = 0;
-		fl->clusters = ((nblk - fl->reserved_blocks -
-				 fl->fat_blocks * 2) >> fl->log2_bpc) + 2;
-	} else {
+	/* Expand root directory to fill unusable data space for FAT12/FAT16. */
+	if (fl->type != UFAT_TYPE_FAT32)
 		fl->root_blocks =
 			nblk - fl->reserved_blocks - fl->fat_blocks * 2 -
 			((fl->clusters - 2) << fl->log2_bpc);
-	}
 
 	/* Set the block count to exactly fit the filesystem. */
 	fl->logical_blocks = ((fl->clusters - 2) << fl->log2_bpc) +
