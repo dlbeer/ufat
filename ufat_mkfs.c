@@ -202,7 +202,7 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 	w16(buf + 0x00e, fl->reserved_blocks << log2_spb);
 	buf[0x010] = 2; /* 2 FATs */
 	w16(buf + 0x011, fl->root_blocks << (dev->log2_block_size - 5));
-	if (fl->logical_blocks <= 0xffff)
+	if (fl->type != UFAT_TYPE_FAT32 && fl->logical_blocks <= UINT16_MAX)
 		w16(buf + 0x013, fl->logical_blocks << log2_spb);
 	else
 		w32(buf + 0x020, fl->logical_blocks << log2_spb);
