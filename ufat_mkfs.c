@@ -288,19 +288,15 @@ static int init_fat16(struct ufat_device *dev, const struct fs_layout *fl)
 		memset(buf, 0, block_size);
 
 		for (j = 0; j < block_size; j += 2) {
-			if (c >= fl->clusters) {
-				buf[j] = 0xf7;
-				buf[j + 1] = 0xff;
-			}
+			if (c >= fl->clusters)
+				w16(buf + j, 0xfff7);
 
 			c++;
 		}
 
 		if (!i) {
-			buf[0] = MEDIA_DISK;
-			buf[1] = 0xff;
-			buf[2] = 0xf8;
-			buf[3] = 0xff;
+			w16(buf, 0xff00 | MEDIA_DISK);
+			w16(buf + 2, 0xfff8);
 		}
 
 		if (dev->write(dev, fl->reserved_blocks + i, 1, buf) < 0 ||
