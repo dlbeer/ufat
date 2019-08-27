@@ -207,20 +207,21 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 	else
 		w32(buf + 0x020, fl->logical_blocks << log2_spb);
 	buf[0x015] = MEDIA_DISK;
-	if (fl->type != UFAT_TYPE_FAT32)
-		w16(buf + 0x016, fl->fat_blocks << log2_spb);
 
-	if (fl->type == UFAT_TYPE_FAT32) {
+	if (fl->type != UFAT_TYPE_FAT32) {
+		w16(buf + 0x016, fl->fat_blocks << log2_spb);
+		buf[0x026] = 0x29; /* Extended boot signature */
+		memset(buf + 0x02b, ' ', 11); /* Volume label */
+		memcpy(buf + 0x036, type_name, 8);
+	} else {
 		w32(buf + 0x024, fl->fat_blocks << log2_spb);
 		w32(buf + 0x02c, 2); /* Root directory cluster */
 		w16(buf + 0x030, 1); /* FS informations sector */
 		w16(buf + 0x032, backup << log2_spb);
+		buf[0x042] = 0x29; /* Extended boot signature */
+		memset(buf + 0x047, ' ', 11); /* Volume label */
 		memcpy(buf + 0x052, type_name, 8);
 	}
-
-	memset(buf + 0x2b, ' ', 11);
-	memcpy(buf + 0x36, type_name, 8);
-	buf[0x042] = 0x29;
 
 	/* Write boot sector and backup */
 	if (dev->write(dev, 0, 1, buf) < 0 ||
