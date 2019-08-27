@@ -325,25 +325,15 @@ static int init_fat32(struct ufat_device *dev, const struct fs_layout *fl)
 		memset(buf, 0, block_size);
 
 		for (j = 0; j < block_size; j += 4) {
-			if (c >= fl->clusters) {
-				buf[j] = 0xf7;
-				buf[j + 1] = 0xff;
-				buf[j + 2] = 0xff;
-				buf[j + 3] = 0xff;
-			}
+			if (c >= fl->clusters)
+				w32(buf + j, 0xfffffff7);
 
 			c++;
 		}
 
 		if (!i) {
-			buf[0] = MEDIA_DISK;
-			buf[1] = 0xff;
-			buf[2] = 0xff;
-			buf[3] = 0xff;
-			buf[4] = 0xf8;
-			buf[5] = 0xff;
-			buf[6] = 0xff;
-			buf[7] = 0xff;
+			w32(buf + 0, 0xffffff00 | MEDIA_DISK);
+			w32(buf + 4, 0xfffffff8);
 		}
 
 		if (dev->write(dev, fl->reserved_blocks + i, 1, buf) < 0 ||
