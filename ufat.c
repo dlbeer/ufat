@@ -158,13 +158,12 @@ int ufat_cache_open(struct ufat *uf, ufat_block_t blk_index)
 	if (err < 0) {
 		uf->cache_desc[i].flags = 0;
 		return err;
-	} else {
-		struct ufat_cache_desc *d = &uf->cache_desc[i];
-
-		d->flags = UFAT_CACHE_FLAG_PRESENT;
-		d->index = blk_index;
-		d->seq = uf->next_seq++;
 	}
+
+	struct ufat_cache_desc *d = &uf->cache_desc[i];
+	d->flags = UFAT_CACHE_FLAG_PRESENT;
+	d->index = blk_index;
+	d->seq = uf->next_seq++;
 
 	uf->stat.cache_miss++;
 	uf->stat.read++;
