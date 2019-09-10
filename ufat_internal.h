@@ -102,6 +102,20 @@ static inline ufat_cluster_t block_to_cluster(const struct ufat_bpb *bpb,
  */
 
 int ufat_cache_open(struct ufat *uf, ufat_block_t blk_index, int skip_read);
+
+/**
+ * \brief Evicts (flushes) cached blocks which overlap with given range.
+ *
+ * \pre `uf` is a valid pointer.
+ * \pre The filesystem pointed by `uf` is opened.
+ *
+ * \param [in] uf is a pointer to the filesystem
+ * \param [in] start is the index of starting block of the range
+ * \param [in] count is the number of blocks in the range
+ *
+ * \return 0 on success, negative error code (`ufat_error_t`) otherwise
+ */
+
 int ufat_cache_evict(struct ufat *uf, ufat_block_t start, ufat_block_t count);
 
 /**
