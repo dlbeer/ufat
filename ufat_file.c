@@ -347,9 +347,7 @@ static int write_blocks(struct ufat_file *f, const char *buf, ufat_size_t size)
 	 * cache and perform a single large write.
 	 */
 	starting_block = cluster_to_block(bpb, f->cur_cluster) + block_offset;
-	i = ufat_cache_evict(uf, starting_block, requested_blocks);
-	if (i < 0)
-		return i;
+	ufat_cache_invalidate(uf, starting_block, requested_blocks);
 
 	i = uf->dev->write(uf->dev, starting_block, requested_blocks, buf);
 	if (i < 0)
