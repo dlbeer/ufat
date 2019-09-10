@@ -82,7 +82,26 @@ static inline ufat_cluster_t block_to_cluster(const struct ufat_bpb *bpb,
 }
 
 /* Block IO via internal cache */
-int ufat_cache_open(struct ufat *uf, ufat_block_t blk_index);
+
+/**
+ * \brief Opens a block via cache.
+ *
+ * \pre `uf` is a valid pointer.
+ * \pre The filesystem pointed by `uf` is opened.
+ *
+ * \param [in] uf is a pointer to the filesystem
+ * \param [in] blk_index is the index of block which should be opened
+ * \param [in] skip_read selects the behavior when block is not present in the
+ * cache:
+ * - 0 - current contents of the block are read from the device;
+ * - not 0 - read operation is skipped and the cached contents are just zeroed -
+ * this is useful when the whole block is going to be overwritten anyway;
+ *
+ * \return cache index on success, negative error code (`ufat_error_t`)
+ * otherwise
+ */
+
+int ufat_cache_open(struct ufat *uf, ufat_block_t blk_index, int skip_read);
 int ufat_cache_evict(struct ufat *uf, ufat_block_t start, ufat_block_t count);
 
 /**
