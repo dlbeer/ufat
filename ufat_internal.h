@@ -85,6 +85,20 @@ static inline ufat_cluster_t block_to_cluster(const struct ufat_bpb *bpb,
 int ufat_cache_open(struct ufat *uf, ufat_block_t blk_index);
 int ufat_cache_evict(struct ufat *uf, ufat_block_t start, ufat_block_t count);
 
+/**
+ * \brief Invalidates (drops) cached blocks which overlap with given range.
+ *
+ * \pre `uf` is a valid pointer.
+ * \pre The filesystem pointed by `uf` is opened.
+ *
+ * \param [in] uf is a pointer to the filesystem
+ * \param [in] start is the index of starting block of the range
+ * \param [in] count is the number of blocks in the range
+ */
+
+void ufat_cache_invalidate(struct ufat *uf, ufat_block_t start,
+			   ufat_block_t count);
+
 static inline void ufat_cache_write(struct ufat *uf, unsigned int cache_index)
 {
 	uf->stat.cache_write++;

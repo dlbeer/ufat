@@ -94,6 +94,20 @@ int ufat_cache_evict(struct ufat *uf, ufat_block_t start, ufat_block_t count)
 	return 0;
 }
 
+void ufat_cache_invalidate(struct ufat *uf, ufat_block_t start,
+			   ufat_block_t count)
+{
+	unsigned int i;
+
+	for (i = 0; i < uf->cache_size; i++) {
+		struct ufat_cache_desc *d = &uf->cache_desc[i];
+
+		if ((d->flags & UFAT_CACHE_FLAG_PRESENT) &&
+		    d->index >= start && d->index < start + count)
+			d->flags = 0;
+	}
+}
+
 int ufat_cache_open(struct ufat *uf, ufat_block_t blk_index)
 {
 	unsigned int i;
