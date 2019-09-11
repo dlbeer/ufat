@@ -168,6 +168,26 @@ static int calculate_layout(struct fs_layout *fl,
 	return 0;
 }
 
+static int erase_blocks(struct ufat_device *dev, ufat_block_t start,
+			ufat_block_t count)
+{
+	const unsigned int block_size = 1 << dev->log2_block_size;
+	uint8_t buf[block_size];
+
+	memset(buf, 0, sizeof(buf));
+	for (ufat_block_t i = 0; i < count; i++)
+		if (dev->write(dev, start + i, 1, buf) < 0)
+			return -UFAT_ERR_IO;
+
+	return 0;
+}
+
+static int erase_reserved_blocks(struct ufat_device *dev,
+				 const struct fs_layout *fl)
+{
+	return erase_blocks(dev, 0, fl->reserved_blocks);
+}
+
 static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 {
 	static const uint8_t boot_header[11] = {
@@ -181,7 +201,6 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 	const unsigned int block_size = 1 << dev->log2_block_size;
 	const ufat_block_t backup = fl->reserved_blocks >> 1;
 	uint8_t buf[block_size];
-	ufat_block_t i;
 
 	switch (fl->type) {
 	case UFAT_TYPE_FAT12:
@@ -197,14 +216,7 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 		break;
 	}
 
-	/* All reserved blocks are zeroed except for the one containing the
-	 * boot sector.
-	 */
 	memset(buf, 0, sizeof(buf));
-	for (i = 1; i < backup; i++)
-		if (dev->write(dev, i, 1, buf) < 0 ||
-		    dev->write(dev, i + backup, 1, buf) < 0)
-			return -UFAT_ERR_IO;
 
 	/* Boot sector signature */
 	memcpy(buf, boot_header, sizeof(boot_header));
@@ -410,6 +422,10 @@ int ufat_mkfs(struct ufat_device *dev, ufat_block_t nblk)
 	int err;
 
 	err = calculate_layout(&fl, nblk, dev->log2_block_size);
+	if (err < 0)
+		return err;
+
+	err = erase_reserved_blocks(dev, &fl);
 	if (err < 0)
 		return err;
 
