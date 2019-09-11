@@ -35,6 +35,7 @@
 #include "ufat.h"
 #include "ufat_internal.h"
 
+#define BACKUP_SECTOR	6
 #define MEDIA_DISK	0xf8
 
 struct fs_layout {
@@ -208,7 +209,6 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 	const unsigned int log2_spb =
 		dev->log2_block_size - fl->log2_sector_size;
 	const unsigned int block_size = 1 << dev->log2_block_size;
-	const ufat_block_t backup = fl->reserved_blocks >> 1;
 	uint8_t buf[block_size];
 
 	switch (fl->type) {
@@ -253,7 +253,7 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 		w32(buf + 0x024, fl->fat_blocks << log2_spb);
 		w32(buf + 0x02c, 2); /* Root directory cluster */
 		w16(buf + 0x030, 1); /* FS informations sector */
-		w16(buf + 0x032, backup << log2_spb);
+		w16(buf + 0x032, BACKUP_SECTOR);
 		buf[0x042] = 0x29; /* Extended boot signature */
 		memset(buf + 0x047, ' ', 11); /* Volume label */
 		memcpy(buf + 0x052, type_name, 8);
@@ -264,7 +264,8 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 		return -UFAT_ERR_IO;
 
 	/* Write backup of boot sector in case of FAT32 */
-	if (fl->type == UFAT_TYPE_FAT32 && dev->write(dev, backup, 1, buf) < 0)
+	if (fl->type == UFAT_TYPE_FAT32 &&
+	    dev->write(dev, BACKUP_SECTOR >> log2_spb, 1, buf) < 0)
 		return -UFAT_ERR_IO;
 
 	return 0;
