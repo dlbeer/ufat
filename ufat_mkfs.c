@@ -250,9 +250,12 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 		memcpy(buf + 0x052, type_name, 8);
 	}
 
-	/* Write boot sector and backup */
-	if (dev->write(dev, 0, 1, buf) < 0 ||
-	    dev->write(dev, backup, 1, buf) < 0)
+	/* Write boot sector */
+	if (dev->write(dev, 0, 1, buf) < 0)
+		return -UFAT_ERR_IO;
+
+	/* Write backup of boot sector in case of FAT32 */
+	if (fl->type == UFAT_TYPE_FAT32 && dev->write(dev, backup, 1, buf) < 0)
 		return -UFAT_ERR_IO;
 
 	return 0;
