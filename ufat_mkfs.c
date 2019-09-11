@@ -206,8 +206,8 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 		'u', 'f', 'a', 't', ' ', ' ', ' ', ' '
 	};
 	const char *type_name = "FAT     ";
-	const unsigned int log2_spb =
-		dev->log2_block_size - fl->log2_sector_size;
+	const unsigned int log2_bps =
+		fl->log2_sector_size - dev->log2_block_size;
 	const unsigned int block_size = 1 << dev->log2_block_size;
 	uint8_t buf[block_size];
 
@@ -234,23 +234,23 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 
 	/* BIOS Parameter Block */
 	w16(buf + 0x00b, 1 << fl->log2_sector_size);
-	buf[0x00d] = 1 << (fl->log2_bpc - log2_spb);
-	w16(buf + 0x00e, fl->reserved_blocks << log2_spb);
+	buf[0x00d] = 1 << (fl->log2_bpc - log2_bps);
+	w16(buf + 0x00e, fl->reserved_blocks << log2_bps);
 	buf[0x010] = 2; /* 2 FATs */
 	w16(buf + 0x011, fl->root_blocks << (dev->log2_block_size - 5));
 	if (fl->type != UFAT_TYPE_FAT32 && fl->logical_blocks <= UINT16_MAX)
-		w16(buf + 0x013, fl->logical_blocks << log2_spb);
+		w16(buf + 0x013, fl->logical_blocks << log2_bps);
 	else
-		w32(buf + 0x020, fl->logical_blocks << log2_spb);
+		w32(buf + 0x020, fl->logical_blocks << log2_bps);
 	buf[0x015] = MEDIA_DISK;
 
 	if (fl->type != UFAT_TYPE_FAT32) {
-		w16(buf + 0x016, fl->fat_blocks << log2_spb);
+		w16(buf + 0x016, fl->fat_blocks << log2_bps);
 		buf[0x026] = 0x29; /* Extended boot signature */
 		memset(buf + 0x02b, ' ', 11); /* Volume label */
 		memcpy(buf + 0x036, type_name, 8);
 	} else {
-		w32(buf + 0x024, fl->fat_blocks << log2_spb);
+		w32(buf + 0x024, fl->fat_blocks << log2_bps);
 		w32(buf + 0x02c, 2); /* Root directory cluster */
 		w16(buf + 0x030, 1); /* FS informations sector */
 		w16(buf + 0x032, BACKUP_SECTOR);
@@ -265,7 +265,7 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 
 	/* Write backup of boot sector in case of FAT32 */
 	if (fl->type == UFAT_TYPE_FAT32 &&
-	    dev->write(dev, BACKUP_SECTOR >> log2_spb, 1, buf) < 0)
+	    dev->write(dev, BACKUP_SECTOR >> log2_bps, 1, buf) < 0)
 		return -UFAT_ERR_IO;
 
 	return 0;
