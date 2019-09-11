@@ -36,6 +36,7 @@
 #include "ufat_internal.h"
 
 #define BACKUP_SECTOR	6
+#define FSINFO_SECTOR	1
 #define MEDIA_DISK	0xf8
 
 struct fs_layout {
@@ -271,6 +272,31 @@ static int write_bpb(struct ufat_device *dev, const struct fs_layout *fl)
 	return 0;
 }
 
+static int write_fsinfo(struct ufat_device *dev, const struct fs_layout *fl)
+{
+	const unsigned int log2_bps =
+		fl->log2_sector_size - dev->log2_block_size;
+	const unsigned int block_size = 1 << dev->log2_block_size;
+	uint8_t buf[block_size];
+
+	memset(buf, 0, sizeof(buf));
+	w32(buf + 0x000, 0x41615252); /* FSI_LeadSig */
+	w32(buf + 0x1e4, 0x61417272); /* FSI_StrucSig */
+	w32(buf + 0x1e8, fl->clusters - 3); /* FSI_Free_Count */
+	w32(buf + 0x1ec, 2); /* FSI_Nxt_Free */
+	w32(buf + 0x1fc, 0xaa550000); /* FSI_TrailSig */
+
+	/* Write FSInfo and its backup */
+	const ufat_block_t fsinfo_block = FSINFO_SECTOR >> log2_bps;
+	const ufat_block_t fsinfo_backup_block =
+		(FSINFO_SECTOR + BACKUP_SECTOR) >> log2_bps;
+	if (dev->write(dev, fsinfo_block, 1, buf) < 0 ||
+	    dev->write(dev, fsinfo_backup_block, 1, buf) < 0)
+		return -UFAT_ERR_IO;
+
+	return 0;
+}
+
 static int init_fat12(struct ufat_device *dev, const struct fs_layout *fl)
 {
 	const unsigned int block_size = 1 << dev->log2_block_size;
@@ -466,6 +492,12 @@ int ufat_mkfs(struct ufat_device *dev, ufat_block_t nblk)
 
 	if (err < 0)
 		return err;
+
+	if (fl.type == UFAT_TYPE_FAT32) {
+		err = write_fsinfo(dev, &fl);
+		if (err < 0)
+			return err;
+	}
 
 	return write_bpb(dev, &fl);
 }
