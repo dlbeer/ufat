@@ -413,10 +413,6 @@ int ufat_mkfs(struct ufat_device *dev, ufat_block_t nblk)
 	if (err < 0)
 		return err;
 
-	err = write_bpb(dev, &fl);
-	if (err < 0)
-		return err;
-
 	switch (fl.type) {
 	case UFAT_TYPE_FAT12:
 		err = init_fat12(dev, &fl);
@@ -435,7 +431,12 @@ int ufat_mkfs(struct ufat_device *dev, ufat_block_t nblk)
 		return err;
 
 	if (fl.type == UFAT_TYPE_FAT32)
-		return init_root_cluster(dev, &fl);
+		err = init_root_cluster(dev, &fl);
+	else
+		err = init_root_blocks(dev, &fl);
 
-	return init_root_blocks(dev, &fl);
+	if (err < 0)
+		return err;
+
+	return write_bpb(dev, &fl);
 }
