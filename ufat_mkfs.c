@@ -94,10 +94,6 @@ static int calculate_layout(struct fs_layout *fl,
 	/* Calculate total logical sector count. */
 	nsect = nblk >> log2_bps;
 
-	/* Calculate the number of reserved blocks. */
-	fl->reserved_blocks = bytes_to_blocks(log2_block_size,
-					      2 << fl->log2_sector_size) << 1;
-
 	/* Threshold values taken from "fatgen103.pdf" -
 	 * https://staff.washington.edu/dittrich/misc/fatgen103.pdf - "FAT
 	 * Volume Initialization" chapter.
@@ -129,6 +125,19 @@ static int calculate_layout(struct fs_layout *fl,
 		++log2_spc;
 
 	fl->log2_bpc = log2_bps + log2_spc;
+
+	/* Calculate the number of reserved blocks.
+	 *
+	 * "fatgen103.pdf" -
+	 * https://staff.washington.edu/dittrich/misc/fatgen103.pdf - "Boot
+	 * Sector and BPB" chapter.
+	 *
+	 * FAT12 and FAT16 should have 1 reserved sector. Typical number of
+	 * reserved sectors for FAT32 is 32.
+	 */
+	const ufat_block_t reserved_sectors =
+		fl->type == UFAT_TYPE_FAT32 ? 32 : 1;
+	fl->reserved_blocks = reserved_sectors << log2_bps;
 
 	/* Estimate an upper bound on the cluster count and allocate blocks
 	 * for the FAT.
