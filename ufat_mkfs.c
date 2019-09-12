@@ -434,17 +434,9 @@ static int init_root_cluster(struct ufat_device *dev,
 {
 	const ufat_block_t cluster_start =
 		fl->fat_blocks * 2 + fl->reserved_blocks + fl->root_blocks;
-	const unsigned int block_size = 1 << dev->log2_block_size;
 	const unsigned int cluster_blocks = 1 << fl->log2_bpc;
-	uint8_t buf[block_size];
-	ufat_block_t i;
 
-	memset(buf, 0, block_size);
-	for (i = 0; i < cluster_blocks; i++)
-		if (dev->write(dev, cluster_start + i, 1, buf) < 0)
-			return -UFAT_ERR_IO;
-
-	return 0;
+	return erase_blocks(dev, cluster_start, cluster_blocks);
 }
 
 int ufat_mkfs(struct ufat_device *dev, ufat_block_t nblk)
