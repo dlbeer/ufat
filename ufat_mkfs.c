@@ -425,16 +425,8 @@ static int init_root_blocks(struct ufat_device *dev, const struct fs_layout *fl)
 {
 	const ufat_block_t root_start =
 		fl->fat_blocks * 2 + fl->reserved_blocks;
-	const unsigned int block_size = 1 << dev->log2_block_size;
-	uint8_t buf[block_size];
-	ufat_block_t i;
 
-	memset(buf, 0, block_size);
-	for (i = 0; i < fl->root_blocks; i++)
-		if (dev->write(dev, root_start + i, 1, buf) < 0)
-			return -UFAT_ERR_IO;
-
-	return 0;
+	return erase_blocks(dev, root_start, fl->root_blocks);
 }
 
 static int init_root_cluster(struct ufat_device *dev,
