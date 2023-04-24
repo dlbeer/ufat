@@ -642,6 +642,7 @@ static int alloc_cluster(struct ufat *uf, ufat_cluster_t *out,
 	for (i = 0; i < total; i++) {
 		const ufat_cluster_t idx = uf->alloc_ptr + 2;
 		ufat_cluster_t c;
+		int err;
 
 		uf->alloc_ptr = (uf->alloc_ptr + 1) % total;
 
@@ -649,8 +650,13 @@ static int alloc_cluster(struct ufat *uf, ufat_cluster_t *out,
 		if (idx == 0xff0 && uf->bpb.type == UFAT_TYPE_FAT12)
 			continue;
 
-		if (!ufat_read_fat(uf, idx, &c) && c == UFAT_CLUSTER_FREE) {
-			int err = ufat_write_fat(uf, idx, tail);
+		err = ufat_read_fat(uf, idx, &c);
+
+		if (err < 0)
+			return err;
+
+		if (c == UFAT_CLUSTER_FREE) {
+			err = ufat_write_fat(uf, idx, tail);
 
 			if (err < 0)
 				return err;
